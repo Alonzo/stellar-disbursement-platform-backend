@@ -25,6 +25,11 @@ See [Production Setup Documentation](./docs/PRODUCTION_SETUP_DOCUMENTATION.md) f
 
 ### Building Docker Images
 
+**Automated (CI/CD):**
+- Push to `main` branch → Automatically builds and pushes to ECR
+- See [CI/CD Setup](./.github/workflows/SETUP_OIDC.md) for initial configuration
+
+**Manual:**
 Use the provided script for native AMD64 builds:
 
 ```bash

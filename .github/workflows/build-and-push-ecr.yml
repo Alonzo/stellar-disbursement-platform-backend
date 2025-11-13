@@ -1,0 +1,111 @@
+name: Build and Push to ECR
+
+on:
+  push:
+    branches:
+      - main  # Production branch
+    tags:
+      - 'v*'  # Build on version tags
+  workflow_dispatch:  # Allow manual triggers
+  pull_request:
+    branches:
+      - main  # Build on PRs to verify it works
+
+env:
+  AWS_REGION: us-west-2
+  AWS_ACCOUNT: "084034390838"
+  ECR_REPOSITORY: stellar-disbursement-platform-backend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest  # Native AMD64 - no cross-compilation!
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC authentication
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # Configure AWS credentials using OIDC (no long-lived keys!)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT }}:role/github-actions-ecr-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Login to ECR
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # Set up Docker Buildx with cache
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Run Trivy vulnerability scanner
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0'  # Don't fail build on vulnerabilities (report only)
+
+      # Build and push with caching
+      - name: Build, tag, and push image to Amazon ECR
+        if: github.event_name != 'pull_request'  # Only push on main branch or tags
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          platforms: linux/amd64  # Native build - fast!
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          # Note: ECR scanOnPush is already enabled, so images are automatically scanned
+
+      # Build only (no push) for PRs
+      - name: Build image (PR verification)
+        if: github.event_name == 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:pr-${{ github.event.pull_request.number }}
+
+      # Upload Trivy results to GitHub Security tab
+      - name: Upload Trivy results to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # Output image info
+      - name: Output image information
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "✅ Build complete!"
+          echo "Image: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          echo "Latest: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest"
+          echo ""
+          echo "To deploy, update Helm values with:"
+          echo "  image.tag: ${{ github.sha }}"
+
