@@ -2,6 +2,11 @@
 *.log
 security-audit-*/
 
+# Local documentation (keep local only)
+.github/workflows/SETUP_OIDC.md
+.github/workflows/TESTING.md
+.github/workflows/PRE_PUSH_TESTING.md
+
 # OS files
 .DS_Store
 *.swp
