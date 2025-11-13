@@ -11,7 +11,7 @@ WORKDIR /src/stellar-disbursement-platform
 ADD go.mod go.sum ./
 RUN go mod download
 COPY . ./
-RUN go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
+RUN go mod tidy && go build -o /bin/stellar-disbursement-platform -ldflags "-X main.GitCommit=$GIT_COMMIT" .
 
 
 FROM alpine:3.22

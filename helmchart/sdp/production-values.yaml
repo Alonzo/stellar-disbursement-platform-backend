@@ -91,7 +91,7 @@ sdp:
   image:
     repository: 084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "latest-case-fix-amd64"  # Rolled back - will rebuild CSP fix for AMD64 platform
+    tag: "latest-csp-fix-amd64"  # CSP fix for reCAPTCHA cross-origin issues
 
   ## Deployment configuration
   deployment:

@@ -8,6 +8,7 @@ AWS_ACCOUNT="084034390838"
 AWS_REGION="us-west-2"
 GITHUB_REPO="m1global/sdp-backend"
 ROLE_NAME="github-actions-ecr-role"
+AWS_PROFILE="${AWS_PROFILE:-devops}"  # Use devops profile by default
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║        Setting Up GitHub OIDC for AWS ECR                     ║"
@@ -15,9 +16,10 @@ echo "╚═══════════════════════�
 echo ""
 
 # Check AWS credentials
-echo "Step 1: Verifying AWS credentials..."
-if ! aws sts get-caller-identity --region "$AWS_REGION" &>/dev/null; then
-    echo "❌ AWS credentials not configured. Please run: aws configure"
+echo "Step 1: Verifying AWS credentials (using profile: $AWS_PROFILE)..."
+if ! aws sts get-caller-identity --region "$AWS_REGION" --profile "$AWS_PROFILE" &>/dev/null; then
+    echo "❌ AWS credentials not configured for profile: $AWS_PROFILE"
+    echo "   Try: export AWS_PROFILE=devops"
     exit 1
 fi
 echo "✅ AWS credentials verified"
@@ -25,20 +27,20 @@ echo ""
 
 # Step 2: Check if OIDC provider already exists
 echo "Step 2: Checking for existing OIDC provider..."
-OIDC_PROVIDER=$(aws iam list-open-id-connect-providers --region "$AWS_REGION" --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')].Arn" --output text 2>/dev/null || echo "")
+OIDC_PROVIDER=$(aws iam list-open-id-connect-providers --region "$AWS_REGION" --profile "$AWS_PROFILE" --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')].Arn" --output text 2>/dev/null || echo "")
 
 if [ -n "$OIDC_PROVIDER" ]; then
     echo "✅ OIDC provider already exists: $OIDC_PROVIDER"
 else
     echo "Creating OIDC provider..."
     
-    # Get GitHub's OIDC thumbprint
+    # Get GitHub's OIDC thumbprint (SHA1, 40 characters)
     echo "   Fetching GitHub OIDC thumbprint..."
-    THUMBPRINT=$(openssl s_client -servername token.actions.githubusercontent.com -showcerts -connect token.actions.githubusercontent.com:443 < /dev/null 2>/dev/null | \
-      openssl x509 -fingerprint -noout | \
+    THUMBPRINT=$(echo | openssl s_client -servername token.actions.githubusercontent.com -showcerts -connect token.actions.githubusercontent.com:443 2>/dev/null | \
+      openssl x509 -fingerprint -sha1 -noout | \
       sed 's/.*=//' | \
       tr -d ':' | \
-      head -1)
+      tr '[:upper:]' '[:lower:]')
     
     if [ -z "$THUMBPRINT" ]; then
         echo "⚠️  Could not fetch thumbprint automatically. Using known thumbprint:"
@@ -51,7 +53,8 @@ else
       --url https://token.actions.githubusercontent.com \
       --client-id-list sts.amazonaws.com \
       --thumbprint-list "$THUMBPRINT" \
-      --region "$AWS_REGION" || {
+      --region "$AWS_REGION" \
+      --profile "$AWS_PROFILE" || {
         echo "❌ Failed to create OIDC provider"
         exit 1
     }
@@ -88,18 +91,20 @@ echo ""
 
 # Step 4: Create IAM role
 echo "Step 4: Creating IAM role..."
-if aws iam get-role --role-name "$ROLE_NAME" --region "$AWS_REGION" &>/dev/null; then
+if aws iam get-role --role-name "$ROLE_NAME" --region "$AWS_REGION" --profile "$AWS_PROFILE" &>/dev/null; then
     echo "⚠️  Role $ROLE_NAME already exists. Updating trust policy..."
     aws iam update-assume-role-policy \
       --role-name "$ROLE_NAME" \
       --policy-document file:///tmp/github-actions-trust-policy.json \
-      --region "$AWS_REGION"
+      --region "$AWS_REGION" \
+      --profile "$AWS_PROFILE"
     echo "✅ Trust policy updated"
 else
     aws iam create-role \
       --role-name "$ROLE_NAME" \
       --assume-role-policy-document file:///tmp/github-actions-trust-policy.json \
-      --region "$AWS_REGION" || {
+      --region "$AWS_REGION" \
+      --profile "$AWS_PROFILE" || {
         echo "❌ Failed to create IAM role"
         exit 1
     }
@@ -112,7 +117,8 @@ echo "Step 5: Attaching ECR permissions..."
 aws iam attach-role-policy \
   --role-name "$ROLE_NAME" \
   --policy-arn arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser \
-  --region "$AWS_REGION" || {
+  --region "$AWS_REGION" \
+  --profile "$AWS_PROFILE" || {
     echo "❌ Failed to attach ECR policy"
     exit 1
 }
@@ -123,15 +129,15 @@ echo ""
 echo "Step 6: Verifying setup..."
 echo ""
 echo "OIDC Provider:"
-aws iam list-open-id-connect-providers --region "$AWS_REGION" --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')]" --output table
+aws iam list-open-id-connect-providers --region "$AWS_REGION" --profile "$AWS_PROFILE" --query "OpenIDConnectProviderList[?contains(Arn, 'token.actions.githubusercontent.com')]" --output table
 
 echo ""
 echo "IAM Role:"
-aws iam get-role --role-name "$ROLE_NAME" --region "$AWS_REGION" --query "Role.{RoleName:RoleName,Arn:Arn}" --output table
+aws iam get-role --role-name "$ROLE_NAME" --region "$AWS_REGION" --profile "$AWS_PROFILE" --query "Role.{RoleName:RoleName,Arn:Arn}" --output table
 
 echo ""
 echo "Attached Policies:"
-aws iam list-attached-role-policies --role-name "$ROLE_NAME" --region "$AWS_REGION" --output table
+aws iam list-attached-role-policies --role-name "$ROLE_NAME" --region "$AWS_REGION" --profile "$AWS_PROFILE" --output table
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"
