@@ -1,0 +1,210 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sdp-test-dashboard
+  namespace: default
+  labels:
+    app.kubernetes.io/instance: sdp-test-dashboard
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: sdp-test-dashboard
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Enable CORS for API endpoints - allow OPTIONS requests
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://sdp.lomalo.app"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "*"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    # Route static asset files (CSS, JS, etc.) to dashboard
+    # Also route SPA detail pages (browser navigation) to dashboard
+    nginx.ingress.kubernetes.io/server-snippet: |
+      # Route static assets to dashboard
+      location ~ ^/assets/.*\.(css|js|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|ico|map)$ {
+        proxy_pass http://sdp-test-dashboard.default.svc.cluster.local:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+      # Route disbursement detail pages to dashboard for SPA routing
+      # This handles browser refresh on detail pages like /disbursements/{uuid}
+      # Only match disbursements detail pages (not payments, receivers, etc. which are API endpoints)
+      # Only match when UUID is at the end of the path (not sub-paths like /disbursements/{uuid}/receivers)
+      location ~ ^/disbursements/[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+$ {
+        proxy_pass http://sdp-test-dashboard.default.svc.cluster.local:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - sdp.lomalo.app
+      secretName: sdp-lomalo-app-tls
+  rules:
+    - host: sdp.lomalo.app
+      http:
+        paths:
+          # API paths route to backend service
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /sep10
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /sep24
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /users
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          # API endpoints route to backend
+          # Note: Detail pages like /disbursements/{id} will also match these Prefix routes
+          # but the nginx location block will intercept them and route based on Authorization header
+          - path: /disbursements
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /payments
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /receivers
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /wallets
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /statistics
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /api-keys
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /login
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /mfa
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /forgot-password
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /reset-password
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /refresh-token
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /organization
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /profile
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          - path: /registration-contact-types
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          # /assets routes to backend for API calls
+          # Static files (with extensions) are handled by nginx snippet above
+          - path: /assets
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          # /balances is a backend API endpoint
+          - path: /balances
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test
+                port:
+                  number: 8000
+          # Note: /distribution-account is a frontend SPA route, not an API endpoint
+          # It should fall through to the dashboard service (catch-all / route)
+          # Dashboard UI and static asset files route to dashboard service (catch-all)
+          # Note: Static files like /assets/*.css are served by dashboard
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-test-dashboard
+                port:
+                  number: 80
+
