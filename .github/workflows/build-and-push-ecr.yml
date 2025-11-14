@@ -93,12 +93,15 @@ jobs:
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:pr-${{ github.event.pull_request.number }}
 
-      # Upload Trivy results to GitHub Security tab
-      - name: Upload Trivy results to GitHub Security
+      # Upload Trivy SARIF results as artifact (bypasses GitHub Security API permissions)
+      # This allows downloading the scan results without requiring GHAS permissions
+      - name: Upload Trivy SARIF as artifact
         if: always() && steps.trivy.outcome == 'success'
-        uses: github/codeql-action/upload-sarif@v4
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: 'trivy-results.sarif'
+          name: trivy-sarif
+          path: trivy-results.sarif
+          retention-days: 30
 
       # Output image info
       - name: Output image information
