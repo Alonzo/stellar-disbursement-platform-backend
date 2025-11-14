@@ -2,10 +2,15 @@
 *.log
 security-audit-*/
 
-# Local documentation (keep local only)
-.github/workflows/SETUP_OIDC.md
-.github/workflows/TESTING.md
-.github/workflows/PRE_PUSH_TESTING.md
+# Local-only files (keep local, never commit)
+# Use wildcards to avoid exposing specific file names
+.github/workflows/*.md
+.github/workflows/*.sh
+*.md
+!README.md
+!CHANGELOG.md
+!CONTRIBUTING.md
+!LICENSE
 
 # OS files
 .DS_Store
