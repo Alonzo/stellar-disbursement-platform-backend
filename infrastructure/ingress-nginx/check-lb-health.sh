@@ -107,6 +107,7 @@ if [ -z "$LB_AZS" ]; then
   fi
 fi
 
+# Check AZ coverage if we were able to determine AZs
 if [ -n "$LB_AZS" ] && [ "$LB_AZS" != "SKIP_CHECK" ]; then
   echo "Load balancer has subnets in AZs: $(echo $LB_AZS | tr '\n' ' ')"
   echo ""
@@ -127,10 +128,17 @@ if [ -n "$LB_AZS" ] && [ "$LB_AZS" != "SKIP_CHECK" ]; then
     echo "✅ All ingress pod AZs are covered by load balancer"
   fi
   echo ""
-else
+elif [ "$LB_AZS" == "SKIP_CHECK" ]; then
   # AZ check was skipped, but we verified subnets are configured
-  echo "✅ Load balancer subnet configuration verified"
-  echo "   Note: Full AZ coverage check requires ec2:DescribeSubnets permission"
+  SUBNET_COUNT=$(echo "$LB_SUBNET_LIST" | wc -w | tr -d ' ')
+  echo "✅ Load balancer subnet configuration verified ($SUBNET_COUNT subnet(s))"
+  echo "   ⚠️  Full AZ coverage check skipped (requires ec2:DescribeSubnets permission)"
+  echo "   However, having $SUBNET_COUNT subnet(s) configured is a good sign"
+  echo ""
+  # Don't fail - we've verified the critical part (subnets are configured)
+else
+  # This shouldn't happen, but handle it gracefully
+  echo "⚠️  Could not verify AZ coverage"
   echo ""
 fi
 
