@@ -120,12 +120,22 @@ jobs:
       - name: Deploy to production
         if: github.event_name != 'pull_request'
         run: |
+          # Check if there's a stuck Helm operation and rollback if needed
+          HELM_STATUS=$(helm status sdp-prod --namespace default 2>&1 || echo "not-found")
+          if echo "$HELM_STATUS" | grep -q "another operation"; then
+            echo "⚠️  Detected stuck Helm operation, attempting to rollback..."
+            helm rollback sdp-prod --namespace default --wait --timeout 2m || true
+            sleep 5
+          fi
+          
+          # Deploy with atomic flag for automatic rollback on failure
           helm upgrade sdp-prod helmchart/sdp \
             --namespace default \
             -f helmchart/sdp/production-values.yaml \
             --set sdp.image.tag=${{ github.sha }} \
             --wait \
-            --timeout 5m
+            --timeout 5m \
+            --atomic
       
       # Output image info
       - name: Output image information
