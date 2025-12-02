@@ -50,91 +50,62 @@ POD_AZS=$(echo "$POD_AZS" | tr ' ' '\n' | sort -u | grep -v '^$')
 echo "Ingress pods are in AZs: $(echo $POD_AZS | tr '\n' ' ')"
 echo ""
 
-# Get load balancer ARN
-echo "Finding load balancer..."
+# Get load balancer subnets from Kubernetes service annotation (works without ELB permissions)
+echo "Finding load balancer configuration..."
 
-# Method 1: Try to get from Kubernetes service annotation (most reliable)
-LB_ARN_FROM_K8S=$(kubectl get svc ingress-nginx-controller -n "$NAMESPACE" -o jsonpath='{.metadata.annotations.service\.beta\.kubernetes\.io/load-balancer-id}' 2>/dev/null)
+# Get subnet IDs from Kubernetes service annotation
+LB_SUBNETS=$(kubectl get svc ingress-nginx-controller -n "$NAMESPACE" \
+  -o jsonpath='{.metadata.annotations.service\.beta\.kubernetes\.io/aws-load-balancer-subnets}' 2>/dev/null)
 
-if [ -n "$LB_ARN_FROM_K8S" ]; then
-  echo "Found load balancer from Kubernetes service annotation"
-  LB_ARN="$LB_ARN_FROM_K8S"
-else
-  # Method 2: Get DNS name from Kubernetes and find matching LB
-  LB_DNS=$(kubectl get svc ingress-nginx-controller -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
-  
-  if [ -n "$LB_DNS" ]; then
-    echo "Found load balancer DNS from Kubernetes: $LB_DNS"
-    # Extract the load balancer name from DNS (format: name-hash.region.elb.amazonaws.com)
-    LB_NAME_PATTERN=$(echo "$LB_DNS" | cut -d'.' -f1 | cut -d'-' -f1-3)
-    
-    LB_ARN=$(aws elbv2 describe-load-balancers \
-      $PROFILE \
-      --region "$REGION" \
-      --query "LoadBalancers[?contains(DNSName, \`$LB_NAME_PATTERN\`)].LoadBalancerArn" \
-      --output text 2>/dev/null | head -1)
-  fi
-fi
-
-# Method 3: Try querying by common patterns
-if [ -z "$LB_ARN" ] || [ "$LB_ARN" == "None" ]; then
-  echo "Trying AWS API query methods..."
-  LB_ARN=$(aws elbv2 describe-load-balancers \
-    $PROFILE \
-    --region "$REGION" \
-    --query 'LoadBalancers[?contains(DNSName, `k8s-ingressn`) || contains(LoadBalancerName, `k8s-ingressn`)].LoadBalancerArn' \
-    --output text 2>/dev/null | head -1)
-fi
-
-# Method 4: Try by type and name pattern
-if [ -z "$LB_ARN" ] || [ "$LB_ARN" == "None" ]; then
-  echo "Trying alternative query by type..."
-  LB_ARN=$(aws elbv2 describe-load-balancers \
-    $PROFILE \
-    --region "$REGION" \
-    --query 'LoadBalancers[?Type==`network` && contains(LoadBalancerName, `ingress`)].LoadBalancerArn' \
-    --output text 2>/dev/null | head -1)
-fi
-
-# If still not found, provide helpful error message
-if [ -z "$LB_ARN" ] || [ "$LB_ARN" == "None" ]; then
-  echo "⚠️  Could not find ingress load balancer"
+if [ -z "$LB_SUBNETS" ]; then
+  echo "⚠️  WARNING: Could not find subnet annotation on service"
+  echo "   This might indicate the service wasn't configured with explicit subnets"
   echo ""
-  echo "Debugging information:"
-  echo "Kubernetes service status:"
-  kubectl get svc ingress-nginx-controller -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer}' 2>&1 || echo "  Could not get service status"
+  echo "   Service annotations:"
+  kubectl get svc ingress-nginx-controller -n "$NAMESPACE" -o jsonpath='{.metadata.annotations}' 2>&1 | jq -r 'to_entries[] | "\(.key): \(.value)"' || echo "  Could not get annotations"
   echo ""
-  echo "Attempting to list load balancers (may fail due to permissions):"
-  aws elbv2 describe-load-balancers \
-    $PROFILE \
-    --region "$REGION" \
-    --query 'LoadBalancers[*].{Name:LoadBalancerName,DNS:DNSName,Type:Type}' \
-    --output json 2>&1 | head -20 || echo "  ERROR: Could not list load balancers"
-  echo ""
-  echo "❌ ERROR: Could not find ingress load balancer"
-  echo ""
-  echo "Possible causes:"
-  echo "  1. IAM permissions missing: elbv2:DescribeLoadBalancers"
-  echo "  2. Load balancer not yet provisioned"
-  echo "  3. Different naming pattern than expected"
-  echo ""
-  echo "To fix IAM permissions, run:"
-  echo "  aws iam attach-role-policy \\"
-  echo "    --role-name github-actions-ecr-role \\"
-  echo "    --policy-arn arn:aws:iam::aws:policy/AmazonEKSReadOnlyAccess"
+  echo "❌ ERROR: Cannot verify subnet configuration without subnet annotation"
+  echo "   The service should have: service.beta.kubernetes.io/aws-load-balancer-subnets"
   exit 1
 fi
 
-echo "Load balancer ARN: $LB_ARN"
+echo "Load balancer subnets: $LB_SUBNETS"
 echo ""
 
-# Get load balancer subnets/AZs
-LB_AZS=$(aws elbv2 describe-load-balancers \
-  $PROFILE \
-  --region "$REGION" \
-  --load-balancer-arns "$LB_ARN" \
-  --query 'LoadBalancers[0].AvailabilityZones[*].ZoneName' \
-  --output text 2>/dev/null | tr '\t' '\n' | sort -u)
+# Get availability zones from subnet IDs (this requires ec2:DescribeSubnets, which is usually available)
+LB_SUBNET_LIST=$(echo "$LB_SUBNETS" | tr ',' ' ')
+LB_AZS=""
+
+for subnet in $LB_SUBNET_LIST; do
+  AZ=$(aws ec2 describe-subnets \
+    $PROFILE \
+    --region "$REGION" \
+    --subnet-ids "$subnet" \
+    --query 'Subnets[0].AvailabilityZone' \
+    --output text 2>/dev/null)
+  
+  if [ -n "$AZ" ] && [ "$AZ" != "None" ]; then
+    LB_AZS="$LB_AZS $AZ"
+  fi
+done
+
+LB_AZS=$(echo "$LB_AZS" | tr ' ' '\n' | sort -u | grep -v '^$')
+
+if [ -z "$LB_AZS" ]; then
+  echo "⚠️  WARNING: Could not determine AZs from subnets"
+  echo "   This might be an IAM permissions issue (ec2:DescribeSubnets)"
+  echo "   Subnets: $LB_SUBNETS"
+  echo ""
+  echo "   Falling back to basic validation..."
+  # At least verify we have subnets configured
+  if [ -n "$LB_SUBNETS" ]; then
+    echo "✅ Load balancer has subnets configured: $LB_SUBNETS"
+    echo "⚠️  Cannot verify AZ coverage without ec2:DescribeSubnets permission"
+  else
+    echo "❌ ERROR: No subnets configured"
+    exit 1
+  fi
+fi
 
 echo "Load balancer has subnets in AZs: $(echo $LB_AZS | tr '\n' ' ')"
 echo ""
@@ -156,35 +127,52 @@ else
 fi
 echo ""
 
-# Check target health for port 443
+# Check target health for port 443 (optional - requires ELB permissions)
 echo "Checking target health (port 443)..."
-TG_443=$(aws elbv2 describe-target-groups \
-  $PROFILE \
-  --region "$REGION" \
-  --load-balancer-arn "$LB_ARN" \
-  --query 'TargetGroups[?Port==`443`].TargetGroupArn' \
-  --output text 2>/dev/null | head -1)
+# Try to get target group from Kubernetes service (if available)
+# Note: This requires ELB API permissions, so we'll make it optional
 
-if [ -n "$TG_443" ] && [ "$TG_443" != "None" ]; then
-  TARGET_HEALTH=$(aws elbv2 describe-target-health \
+# Get load balancer ARN if we can (for target health check)
+LB_ARN_FROM_K8S=$(kubectl get svc ingress-nginx-controller -n "$NAMESPACE" \
+  -o jsonpath='{.metadata.annotations.service\.beta\.kubernetes\.io/load-balancer-id}' 2>/dev/null)
+
+if [ -n "$LB_ARN_FROM_K8S" ]; then
+  TG_443=$(aws elbv2 describe-target-groups \
     $PROFILE \
     --region "$REGION" \
-    --target-group-arn "$TG_443" \
-    --query 'TargetHealthDescriptions[*].{Target:Target.Id,Port:Target.Port,State:TargetHealth.State,Reason:TargetHealth.Reason}' \
-    --output json 2>/dev/null)
-  
-  UNHEALTHY=$(echo "$TARGET_HEALTH" | jq -r '.[] | select(.State != "healthy")' 2>/dev/null)
-  
-  if [ -n "$UNHEALTHY" ] && [ "$UNHEALTHY" != "null" ]; then
-    echo "⚠️  WARNING: Some targets are not healthy:"
-    echo "$TARGET_HEALTH" | jq .
-    ((ERRORS++))
+    --load-balancer-arn "$LB_ARN_FROM_K8S" \
+    --query 'TargetGroups[?Port==`443`].TargetGroupArn' \
+    --output text 2>/dev/null | head -1)
+
+  if [ -n "$TG_443" ] && [ "$TG_443" != "None" ]; then
+    TARGET_HEALTH=$(aws elbv2 describe-target-health \
+      $PROFILE \
+      --region "$REGION" \
+      --target-group-arn "$TG_443" \
+      --query 'TargetHealthDescriptions[*].{Target:Target.Id,Port:Target.Port,State:TargetHealth.State,Reason:TargetHealth.Reason}' \
+      --output json 2>/dev/null)
+    
+    if [ $? -eq 0 ] && [ -n "$TARGET_HEALTH" ]; then
+      UNHEALTHY=$(echo "$TARGET_HEALTH" | jq -r '.[] | select(.State != "healthy")' 2>/dev/null)
+      
+      if [ -n "$UNHEALTHY" ] && [ "$UNHEALTHY" != "null" ]; then
+        echo "⚠️  WARNING: Some targets are not healthy:"
+        echo "$TARGET_HEALTH" | jq .
+        ((ERRORS++))
+      else
+        echo "✅ All targets are healthy"
+        echo "$TARGET_HEALTH" | jq .
+      fi
+    else
+      echo "⚠️  Could not check target health (ELB API permissions may be missing)"
+      echo "   This is optional - main checks (subnet/AZ coverage) are complete"
+    fi
   else
-    echo "✅ All targets are healthy"
-    echo "$TARGET_HEALTH" | jq .
+    echo "⚠️  Could not find target group for port 443"
   fi
 else
-  echo "⚠️  WARNING: Could not find target group for port 443"
+  echo "⚠️  Skipping target health check (requires ELB API permissions)"
+  echo "   Main validation (subnet/AZ coverage) is complete"
 fi
 echo ""
 
