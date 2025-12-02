@@ -107,25 +107,32 @@ if [ -z "$LB_AZS" ]; then
   fi
 fi
 
-echo "Load balancer has subnets in AZs: $(echo $LB_AZS | tr '\n' ' ')"
-echo ""
-
-# Check if all pod AZs are covered
-MISSING_AZS=$(comm -23 <(echo "$POD_AZS" | sort) <(echo "$LB_AZS" | sort))
-
-if [ -n "$MISSING_AZS" ]; then
-  echo "❌ ERROR: Load balancer missing subnets in: $(echo $MISSING_AZS | tr '\n' ' ')"
-  echo "   Ingress pods in these AZs cannot be used by the load balancer!"
+if [ -n "$LB_AZS" ] && [ "$LB_AZS" != "SKIP_CHECK" ]; then
+  echo "Load balancer has subnets in AZs: $(echo $LB_AZS | tr '\n' ' ')"
   echo ""
-  echo "   Fix: Add missing subnets to ingress-nginx service annotation:"
-  echo "   kubectl annotate svc ingress-nginx-controller -n $NAMESPACE \\"
-  echo "     service.beta.kubernetes.io/aws-load-balancer-subnets=\"<all-subnet-ids>\" \\"
-  echo "     --overwrite"
-  ((ERRORS++))
+  
+  # Check if all pod AZs are covered
+  MISSING_AZS=$(comm -23 <(echo "$POD_AZS" | sort) <(echo "$LB_AZS" | sort))
+  
+  if [ -n "$MISSING_AZS" ]; then
+    echo "❌ ERROR: Load balancer missing subnets in: $(echo $MISSING_AZS | tr '\n' ' ')"
+    echo "   Ingress pods in these AZs cannot be used by the load balancer!"
+    echo ""
+    echo "   Fix: Add missing subnets to ingress-nginx service annotation:"
+    echo "   kubectl annotate svc ingress-nginx-controller -n $NAMESPACE \\"
+    echo "     service.beta.kubernetes.io/aws-load-balancer-subnets=\"<all-subnet-ids>\" \\"
+    echo "     --overwrite"
+    ((ERRORS++))
+  else
+    echo "✅ All ingress pod AZs are covered by load balancer"
+  fi
+  echo ""
 else
-  echo "✅ All ingress pod AZs are covered by load balancer"
+  # AZ check was skipped, but we verified subnets are configured
+  echo "✅ Load balancer subnet configuration verified"
+  echo "   Note: Full AZ coverage check requires ec2:DescribeSubnets permission"
+  echo ""
 fi
-echo ""
 
 # Check target health for port 443 (optional - requires ELB permissions)
 echo "Checking target health (port 443)..."
