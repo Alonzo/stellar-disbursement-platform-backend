@@ -52,14 +52,76 @@ echo ""
 
 # Get load balancer ARN
 echo "Finding load balancer..."
-LB_ARN=$(aws elbv2 describe-load-balancers \
-  $PROFILE \
-  --region "$REGION" \
-  --query 'LoadBalancers[?contains(DNSName, `k8s-ingressn`)].LoadBalancerArn' \
-  --output text 2>/dev/null)
 
+# Method 1: Try to get from Kubernetes service annotation (most reliable)
+LB_ARN_FROM_K8S=$(kubectl get svc ingress-nginx-controller -n "$NAMESPACE" -o jsonpath='{.metadata.annotations.service\.beta\.kubernetes\.io/load-balancer-id}' 2>/dev/null)
+
+if [ -n "$LB_ARN_FROM_K8S" ]; then
+  echo "Found load balancer from Kubernetes service annotation"
+  LB_ARN="$LB_ARN_FROM_K8S"
+else
+  # Method 2: Get DNS name from Kubernetes and find matching LB
+  LB_DNS=$(kubectl get svc ingress-nginx-controller -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)
+  
+  if [ -n "$LB_DNS" ]; then
+    echo "Found load balancer DNS from Kubernetes: $LB_DNS"
+    # Extract the load balancer name from DNS (format: name-hash.region.elb.amazonaws.com)
+    LB_NAME_PATTERN=$(echo "$LB_DNS" | cut -d'.' -f1 | cut -d'-' -f1-3)
+    
+    LB_ARN=$(aws elbv2 describe-load-balancers \
+      $PROFILE \
+      --region "$REGION" \
+      --query "LoadBalancers[?contains(DNSName, \`$LB_NAME_PATTERN\`)].LoadBalancerArn" \
+      --output text 2>/dev/null | head -1)
+  fi
+fi
+
+# Method 3: Try querying by common patterns
 if [ -z "$LB_ARN" ] || [ "$LB_ARN" == "None" ]; then
+  echo "Trying AWS API query methods..."
+  LB_ARN=$(aws elbv2 describe-load-balancers \
+    $PROFILE \
+    --region "$REGION" \
+    --query 'LoadBalancers[?contains(DNSName, `k8s-ingressn`) || contains(LoadBalancerName, `k8s-ingressn`)].LoadBalancerArn' \
+    --output text 2>/dev/null | head -1)
+fi
+
+# Method 4: Try by type and name pattern
+if [ -z "$LB_ARN" ] || [ "$LB_ARN" == "None" ]; then
+  echo "Trying alternative query by type..."
+  LB_ARN=$(aws elbv2 describe-load-balancers \
+    $PROFILE \
+    --region "$REGION" \
+    --query 'LoadBalancers[?Type==`network` && contains(LoadBalancerName, `ingress`)].LoadBalancerArn' \
+    --output text 2>/dev/null | head -1)
+fi
+
+# If still not found, provide helpful error message
+if [ -z "$LB_ARN" ] || [ "$LB_ARN" == "None" ]; then
+  echo "⚠️  Could not find ingress load balancer"
+  echo ""
+  echo "Debugging information:"
+  echo "Kubernetes service status:"
+  kubectl get svc ingress-nginx-controller -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer}' 2>&1 || echo "  Could not get service status"
+  echo ""
+  echo "Attempting to list load balancers (may fail due to permissions):"
+  aws elbv2 describe-load-balancers \
+    $PROFILE \
+    --region "$REGION" \
+    --query 'LoadBalancers[*].{Name:LoadBalancerName,DNS:DNSName,Type:Type}' \
+    --output json 2>&1 | head -20 || echo "  ERROR: Could not list load balancers"
+  echo ""
   echo "❌ ERROR: Could not find ingress load balancer"
+  echo ""
+  echo "Possible causes:"
+  echo "  1. IAM permissions missing: elbv2:DescribeLoadBalancers"
+  echo "  2. Load balancer not yet provisioned"
+  echo "  3. Different naming pattern than expected"
+  echo ""
+  echo "To fix IAM permissions, run:"
+  echo "  aws iam attach-role-policy \\"
+  echo "    --role-name github-actions-ecr-role \\"
+  echo "    --policy-arn arn:aws:iam::aws:policy/AmazonEKSReadOnlyAccess"
   exit 1
 fi
 
