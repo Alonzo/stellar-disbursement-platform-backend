@@ -217,7 +217,9 @@ func Serve(opts ServeOptions, httpServer HTTPServerInterface) error {
 }
 
 const (
-	rateLimitPer20Seconds = 40
+	// Increased from 40 to 200 to accommodate SPA with multiple concurrent API calls
+	// Frontend pages can make 5-10+ requests on load (organization, wallets, verification-types, etc.)
+	rateLimitPer20Seconds = 200
 	rateLimitWindow       = 20 * time.Second
 )
 
