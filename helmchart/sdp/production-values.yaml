@@ -140,6 +140,8 @@ sdp:
       CORS_ALLOWED_ORIGINS: "https://sdp.lomalo.app"
       
       ## ReCaptcha configuration (production keys from AWS Secrets Manager: sdp/prod/recaptcha/*)
+      ## Using v2 (checkbox) per MAINNET_PRODUCTION_CHECKLIST; no CAPTCHA_TYPE = backend default GOOGLE_RECAPTCHA_V2.
+      ## If script still fails: key may need sdp.lomalo.app in Google allowlist, or use test keys (see SDP_RECAPTCHA_SETUP.md).
       RECAPTCHA_SITE_KEY: "6Ler9QosAAAAANi6hHazk75jfmEQJWZR1_yB0-X-"
       RECAPTCHA_SITE_SECRET_KEY: "6Ler9QosAAAAAFR9rOlh5mo6wC8Eep5_dJMhda7v"
       
