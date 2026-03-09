@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1698,7 +1698,7 @@ func Test_PaymentModel_GetBatchForUpdate(t *testing.T) {
 		_, err = dbTx2.ExecContext(ctx, "SET LOCAL lock_timeout = '1s'")
 		require.NoError(t, err)
 		_, err = dbTx2.ExecContext(ctx, "UPDATE payments SET status = 'FAILED' WHERE id = $1", paymentReady.ID)
-		assert.EqualError(t, err, "pq: canceling statement due to lock timeout")
+		assert.ErrorContains(t, err, "pq: canceling statement due to lock timeout")
 	})
 }
 
@@ -1795,6 +1795,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				`COALESCE(stellar_transaction_id, '') AS "stellar_transaction_id"`,
 				`COALESCE(stellar_operation_id, '') AS "stellar_operation_id"`,
 				`COALESCE(external_payment_id, '') AS "external_payment_id"`,
+				`COALESCE(sender_address, '') AS "sender_address"`,
 			}, ",\n"),
 		},
 		{
@@ -1811,6 +1812,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				`COALESCE(p.stellar_transaction_id, '') AS "stellar_transaction_id"`,
 				`COALESCE(p.stellar_operation_id, '') AS "stellar_operation_id"`,
 				`COALESCE(p.external_payment_id, '') AS "external_payment_id"`,
+				`COALESCE(p.sender_address, '') AS "sender_address"`,
 			}, ",\n"),
 		},
 		{
@@ -1827,6 +1829,7 @@ func Test_PaymentColumnNames(t *testing.T) {
 				`COALESCE(p.stellar_transaction_id, '') AS "payment.stellar_transaction_id"`,
 				`COALESCE(p.stellar_operation_id, '') AS "payment.stellar_operation_id"`,
 				`COALESCE(p.external_payment_id, '') AS "payment.external_payment_id"`,
+				`COALESCE(p.sender_address, '') AS "payment.sender_address"`,
 			}, ",\n"),
 		},
 	}

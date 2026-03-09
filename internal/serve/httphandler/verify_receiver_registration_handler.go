@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/httpjson"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
@@ -88,7 +88,10 @@ func (v VerifyReceiverRegistrationHandler) validate(r *http.Request) (reqObj dat
 	}
 
 	// STEP 3: Validate reCAPTCHA Token
-	if !v.ReCAPTCHADisabled {
+	if !IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            v.Models,
+		ReCAPTCHADisabled: v.ReCAPTCHADisabled,
+	}) {
 		isValid, tokenErr := v.ReCAPTCHAValidator.IsTokenValid(ctx, receiverRegistrationRequest.ReCAPTCHAToken)
 		if tokenErr != nil {
 			tokenErr = fmt.Errorf("validating reCAPTCHA token: %w", tokenErr)
@@ -238,10 +241,10 @@ func (v VerifyReceiverRegistrationHandler) processReceiverWalletOTP(
 	rw.OTPConfirmedAt = &now
 	rw.OTPConfirmedWith = contactInfo
 	rw.Status = data.RegisteredReceiversWalletStatus
-	rw.StellarAddress = sep24Claims.SEP10StellarAccount()
-	rw.StellarMemo = sep24Claims.SEP10StellarMemo()
+	rw.StellarAddress = sep24Claims.Account()
+	rw.StellarMemo = sep24Claims.Memo()
 	rw.StellarMemoType = ""
-	if sep24Claims.SEP10StellarMemo() != "" {
+	if sep24Claims.Memo() != "" {
 		rw.StellarMemoType = schema.MemoTypeID
 	}
 	err = v.Models.ReceiverWallet.Update(ctx, rw.ID, data.ReceiverWalletUpdate{

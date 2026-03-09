@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/stellar/go/strkey"
+	"github.com/stellar/go-stellar-sdk/strkey"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -16,6 +16,11 @@ type DisbursementInstructionsValidator struct {
 	verificationField data.VerificationType
 	*Validator
 }
+
+const (
+	maxReceiverExternalIDLength = 64
+	maxExternalPaymentIDLength  = 64
+)
 
 func NewDisbursementInstructionsValidator(contactType data.RegistrationContactType, verificationField data.VerificationType) *DisbursementInstructionsValidator {
 	return &DisbursementInstructionsValidator{
@@ -28,7 +33,21 @@ func NewDisbursementInstructionsValidator(contactType data.RegistrationContactTy
 func (iv *DisbursementInstructionsValidator) ValidateInstruction(instruction *data.DisbursementInstruction, lineNumber int) {
 	// 1. Validate required fields
 	iv.Check(instruction.ID != "", fmt.Sprintf("line %d - id", lineNumber), "id cannot be empty")
+	if instruction.ID != "" {
+		iv.CheckError(
+			utils.ValidateStringLength(instruction.ID, "id", maxReceiverExternalIDLength),
+			fmt.Sprintf("line %d - id", lineNumber),
+			"",
+		)
+	}
 	iv.CheckError(utils.ValidateAmount(instruction.Amount), fmt.Sprintf("line %d - amount", lineNumber), "invalid amount. Amount must be a positive number")
+	if instruction.ExternalPaymentID != "" {
+		iv.CheckError(
+			utils.ValidateStringLength(instruction.ExternalPaymentID, "paymentID", maxExternalPaymentIDLength),
+			fmt.Sprintf("line %d - paymentID", lineNumber),
+			"",
+		)
+	}
 
 	// 2. Validate Contact fields
 	switch iv.contactType.ReceiverContactType {

@@ -13,10 +13,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/txnbuild"
+	"github.com/shopspring/decimal"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -379,8 +380,10 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"circle_recipients",
 			"circle_transfer_requests",
 			"disbursements",
+			"embedded_wallets",
 			"messages",
 			"organizations",
+			"passkey_sessions",
 			"payments",
 			"receiver_verifications",
 			"receiver_verifications_audit",
@@ -390,9 +393,11 @@ func Test_TenantHandler_Post(t *testing.T) {
 			"receivers_audit",
 			"sdp_migrations",
 			"short_urls",
+			"sponsored_transactions",
 			"wallets",
 			"wallets_assets",
 			"receiver_registration_attempts",
+			"sep_nonces",
 			"api_keys",
 			"api_keys_audit",
 		}
@@ -412,7 +417,7 @@ func Test_TenantHandler_Post(t *testing.T) {
 			fmt.Sprintf("%s:", assets.XLMAssetCode),
 		},
 		)
-		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"User Managed Wallet", "Demo Wallet", "Vibrant Assist"})
+		tenant.AssertRegisteredWalletsFixture(t, ctx, tenantSchemaConnectionPool, []string{"User Managed Wallet", "Demo Wallet", "Vibrant Assist", "Embedded Wallet"})
 		tenant.AssertRegisteredUserFixture(t, ctx, tenantSchemaConnectionPool, "Owner", "Owner", "owner@email.org")
 	}
 
@@ -1215,8 +1220,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
-					Return(map[data.Asset]float64{
-						{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}: 100.0,
+					Return(map[data.Asset]decimal.Decimal{
+						{Code: assets.USDCAssetCode, Issuer: assets.USDCAssetIssuerTestnet}: decimal.NewFromFloat(100.0),
 					}, nil).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -1232,8 +1237,8 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
-					Return(map[data.Asset]float64{
-						{Code: "XLM", Issuer: ""}: 120.0,
+					Return(map[data.Asset]decimal.Decimal{
+						{Code: "XLM", Issuer: ""}: decimal.NewFromFloat(120.0),
 					}, nil).Once()
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -1250,7 +1255,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
-					Return(map[data.Asset]float64{}, nil).Once()
+					Return(map[data.Asset]decimal.Decimal{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(nil, errors.New("foobar")).
 					Once()
@@ -1291,7 +1296,7 @@ func Test_TenantHandler_Delete(t *testing.T) {
 				distAccResolver.On("HostDistributionAccount").Return(hostAccount).Once()
 				distAccResolver.On("DistributionAccount", mock.Anything, tntID).Return(tntDistributionAcc, nil).Once()
 				distAccSvc.On("GetBalances", mock.Anything, &tntDistributionAcc).
-					Return(map[data.Asset]float64{}, nil).Once()
+					Return(map[data.Asset]decimal.Decimal{}, nil).Once()
 				tntManagerMock.On("SoftDeleteTenantByID", mock.Anything, tntID).
 					Return(&schema.Tenant{
 						ID:                         tntID,

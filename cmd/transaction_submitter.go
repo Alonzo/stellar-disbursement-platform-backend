@@ -8,14 +8,15 @@ import (
 	"syscall"
 
 	"github.com/spf13/cobra"
-	"github.com/stellar/go/support/config"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/config"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	cmdUtils "github.com/stellar/stellar-disbursement-platform-backend/cmd/utils"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	di "github.com/stellar/stellar-disbursement-platform-backend/internal/dependencyinjection"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/serve"
+	"github.com/stellar/stellar-disbursement-platform-backend/internal/stellar"
 	txSub "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/engine/signing"
 	tssMonitor "github.com/stellar/stellar-disbursement-platform-backend/internal/transactionsubmission/monitor"
@@ -129,6 +130,10 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 		cmdUtils.DBPoolConfigOptions(&globalOptions.DBPool)...,
 	)
 
+	// rpc options
+	rpcOptions := stellar.RPCOptions{}
+	configOpts = append(configOpts, cmdUtils.RPCConfigOptions(&rpcOptions)...)
+
 	cmd := &cobra.Command{
 		Use:   "tss",
 		Short: "Run the Transaction Submission Service",
@@ -195,6 +200,18 @@ func (c *TxSubmitterCommand) Command(submitterService TxSubmitterServiceInterfac
 				log.Ctx(ctx).Fatalf("error creating submitter engine: %v", err)
 			}
 			tssOpts.SubmitterEngine = submitterEngine
+
+			// Initializing the RPC Client
+			if rpcOptions.RPCUrl != "" {
+				rpcClient, rpcClientErr := di.NewRPCClient(ctx, rpcOptions)
+				if rpcClientErr != nil {
+					log.Ctx(ctx).Fatalf("error creating RPC client: %s", rpcClientErr.Error())
+				}
+				log.Ctx(ctx).Infof("Using RPC client with URL %s", rpcOptions.RPCUrl)
+				tssOpts.RPCClient = rpcClient
+			} else {
+				log.Ctx(ctx).Warn("No RPC client URL provided. Embedded wallet transactions will not be submitted.")
+			}
 
 			// Initializing the CrashTrackerClient
 			globalOptions.PopulateCrashTrackerOptions(&crashTrackerOptions) // parses globalOptions relevant to the crash crash tracker

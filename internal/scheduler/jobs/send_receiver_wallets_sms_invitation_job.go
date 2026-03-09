@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/crashtracker"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -20,6 +20,7 @@ const (
 type SendReceiverWalletsInvitationJobOptions struct {
 	Models                      *data.Models
 	MessageDispatcher           message.MessageDispatcherInterface
+	EmbeddedWalletService       services.EmbeddedWalletServiceInterface
 	MaxInvitationResendAttempts int64
 	Sep10SigningPrivateKey      string
 	CrashTrackerClient          crashtracker.CrashTrackerClient
@@ -55,11 +56,12 @@ func (j sendReceiverWalletsInvitationJob) Execute(ctx context.Context) error {
 
 func NewSendReceiverWalletsInvitationJob(options SendReceiverWalletsInvitationJobOptions) Job {
 	if options.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
-		log.Fatalf("job interval is not set for %s. Instantiation failed", sendReceiverWalletsInvitationJobName)
+		log.Fatalf("job interval for %s is set below the minimum %d. Instantiation failed", sendReceiverWalletsInvitationJobName, DefaultMinimumJobIntervalSeconds)
 	}
 	s, err := services.NewSendReceiverWalletInviteService(
 		options.Models,
 		options.MessageDispatcher,
+		options.EmbeddedWalletService,
 		options.Sep10SigningPrivateKey,
 		options.MaxInvitationResendAttempts,
 		options.CrashTrackerClient,

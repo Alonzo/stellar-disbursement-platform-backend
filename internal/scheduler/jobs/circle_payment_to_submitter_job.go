@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/circle"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
@@ -37,7 +37,7 @@ type CirclePaymentToSubmitterJobOptions struct {
 
 func NewCirclePaymentToSubmitterJob(opts CirclePaymentToSubmitterJobOptions) Job {
 	if opts.JobIntervalSeconds < DefaultMinimumJobIntervalSeconds {
-		log.Fatalf("job interval is not set for %s. Instantiation failed", circlePaymentToSubmitterJobName)
+		log.Fatalf("job interval for %s is set below the minimum %d. Instantiation failed", circlePaymentToSubmitterJobName, DefaultMinimumJobIntervalSeconds)
 	}
 
 	var circlePaymentDispatcher paymentdispatchers.PaymentDispatcherInterface

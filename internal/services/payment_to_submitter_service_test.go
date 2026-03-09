@@ -3,12 +3,11 @@ package services
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/stellar/go/keypair"
+	"github.com/stellar/go-stellar-sdk/keypair"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -285,7 +284,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 
 			// 👀 [STELLAR] Validate: TSS submitter_transactions table
 			if tc.distributionAccount.IsStellar() {
-				transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{paymentRegistered.ID, paymentReady.ID})
+				transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{paymentRegistered.ID, paymentReady.ID})
 				require.NoError(t, err)
 				require.Len(t, transactions, 1)
 
@@ -296,7 +295,7 @@ func Test_PaymentToSubmitterService_SendPaymentsMethods(t *testing.T) {
 					assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
 					assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Code, tx.AssetCode)
 					assert.Equal(t, expectedPayments[tx.ExternalID].Asset.Issuer, tx.AssetIssuer)
-					assert.Equal(t, expectedPayments[tx.ExternalID].Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
+					assert.Equal(t, expectedPayments[tx.ExternalID].Amount, tx.Amount.StringFixed(7))
 					assert.Equal(t, expectedPayments[tx.ExternalID].ReceiverWallet.StellarAddress, tx.Destination)
 					assert.Equal(t, expectedPayments[tx.ExternalID].ID, tx.ExternalID)
 					assert.Equal(t, testTenant.ID, tx.TenantID)
@@ -676,7 +675,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
 
-	transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	assert.Len(t, transactions, 1)
 
@@ -690,7 +689,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	_, err = tssModel.UpdateStatusToError(ctx, *transaction, "Failing Test")
 	require.NoError(t, err)
 
-	transactions, err = tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err = tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	assert.Len(t, transactions, 1)
 
@@ -721,7 +720,7 @@ func Test_PaymentToSubmitterService_RetryPayment(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, data.PendingPaymentStatus, paymentDB.Status)
 
-	transactions, err = tssModel.GetAllByPaymentIDs(ctx, []string{payment.ID})
+	transactions, err = tssModel.GetAllByExternalIDs(ctx, []string{payment.ID})
 	require.NoError(t, err)
 	assert.Len(t, transactions, 2)
 

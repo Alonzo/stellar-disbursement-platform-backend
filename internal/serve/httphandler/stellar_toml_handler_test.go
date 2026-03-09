@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/stellar/go/network"
+	"github.com/stellar/go-stellar-sdk/network"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -215,6 +215,49 @@ func Test_StellarTomlHandler_buildGeneralInformation(t *testing.T) {
 				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
 				`WEB_AUTH_ENDPOINT="https://tenant.example.com/sep10/auth"`,
 				`TRANSFER_SERVER_SEP0024="https://tenant.example.com/sep24"`,
+			},
+		},
+		{
+			name:              "testnet with SEP-45 enabled (with tenant in context)",
+			isTenantInContext: true,
+			tenantInContext:   testTenant,
+			s: StellarTomlHandler{
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				Sep45ContractID:       "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				BaseURL:               "https://sdp-domain",
+			},
+			wantLines: []string{
+				fmt.Sprintf(`ACCOUNTS=[%q, "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`, tenantDistAccPublicKey),
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
+				`WEB_AUTH_ENDPOINT="https://tenant.example.com/sep10/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://tenant.example.com/sep24"`,
+				"",
+				`WEB_AUTH_CONTRACT_ID="CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"`,
+				`WEB_AUTH_FOR_CONTRACTS_ENDPOINT="https://tenant.example.com/sep45/auth"`,
+			},
+		},
+		{
+			name:              "testnet with SEP-45 enabled (without tenant in context)",
+			isTenantInContext: false,
+			s: StellarTomlHandler{
+				NetworkPassphrase:     network.TestNetworkPassphrase,
+				Sep10SigningPublicKey: "GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S",
+				Sep45ContractID:       "CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX",
+				BaseURL:               "https://sdp-domain",
+			},
+			wantLines: []string{
+				`ACCOUNTS=["GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"]`,
+				`SIGNING_KEY="GAX46JJZ3NPUM2EUBTTGFM6ITDF7IGAFNBSVWDONPYZJREHFPP2I5U7S"`,
+				fmt.Sprintf("NETWORK_PASSPHRASE=%q", network.TestNetworkPassphrase),
+				fmt.Sprintf("HORIZON_URL=%q", horizonTestnetURL),
+				`WEB_AUTH_ENDPOINT="https://test.com/sep10/auth"`,
+				`TRANSFER_SERVER_SEP0024="https://test.com/sep24"`,
+				"",
+				`WEB_AUTH_CONTRACT_ID="CD3LA6RKF5D2FN2R2L57MWXLBRSEWWENE74YBEFZSSGNJRJGICFGQXMX"`,
+				`WEB_AUTH_FOR_CONTRACTS_ENDPOINT="https://test.com/sep45/auth"`,
 			},
 		},
 	}

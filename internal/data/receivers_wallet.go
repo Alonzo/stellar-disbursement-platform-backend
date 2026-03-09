@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/strkey"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/strkey"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -220,7 +220,7 @@ func ReceiverWalletColumnNames(tableReference, resultAlias string) string {
 			"updated_at",
 			"invitation_sent_at",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"sep24_transaction_id",
 			"stellar_address",
 			"stellar_memo",

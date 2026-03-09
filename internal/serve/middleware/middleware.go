@@ -11,8 +11,8 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/rs/cors"
-	"github.com/stellar/go/support/http/mutil"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/http/mutil"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/monitor"
@@ -264,16 +264,15 @@ func CSPMiddleware() func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 			selfSrc := "'self'"
 			recaptchaSrc := "https://www.google.com/recaptcha/"
-			googleSrc := "https://www.google.com"
 			ipapiSrc := "https://ipapi.co/json"
 			cspItems := []cspItem{
-				{"script-src", []string{selfSrc, recaptchaSrc, googleSrc, "https://www.gstatic.com/recaptcha/"}},
+				{"script-src", []string{selfSrc, recaptchaSrc, "https://www.gstatic.com/recaptcha/"}},
 				{"style-src", []string{selfSrc, recaptchaSrc, "https://fonts.googleapis.com/css2", "'unsafe-inline'"}},
-				{"connect-src", []string{selfSrc, recaptchaSrc, googleSrc, ipapiSrc}},
+				{"connect-src", []string{selfSrc, recaptchaSrc, ipapiSrc}},
 				{"font-src", []string{selfSrc, "https://fonts.gstatic.com"}},
 				{"default-src", []string{selfSrc}},
 
-				{"frame-src", []string{selfSrc, recaptchaSrc, googleSrc}},
+				{"frame-src", []string{selfSrc, recaptchaSrc}},
 				{"frame-ancestors", []string{selfSrc}},
 
 				{"form-action", []string{selfSrc}},
@@ -382,6 +381,19 @@ func BasicAuthMiddleware(adminAccount, adminAPIKey string) func(http.Handler) ht
 			}
 
 			log.Ctx(ctx).Infof("[AdminAuth] - Admin authenticated with account %s", adminAccount)
+			next.ServeHTTP(rw, req)
+		})
+	}
+}
+
+// DefaultMaxRequestBodySize is the default maximum request body size (10 MB) applied globally (CWE-770).
+const DefaultMaxRequestBodySize int64 = 10 * 1024 * 1024
+
+// MaxBodySize is a middleware that limits the size of the request body using http.MaxBytesReader (CWE-770).
+func MaxBodySize(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+			req.Body = http.MaxBytesReader(rw, req.Body, maxBytes)
 			next.ServeHTTP(rw, req)
 		})
 	}

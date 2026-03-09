@@ -3,7 +3,6 @@ package paymentdispatchers
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -226,14 +225,14 @@ func Test_StellarPaymentDispatcher_DispatchPayments_success(t *testing.T) {
 			assert.Equal(t, data.PendingPaymentStatus, p.Status)
 
 			// Transaction should be created with the correct values
-			transactions, err := tssModel.GetAllByPaymentIDs(ctx, []string{p.ID})
+			transactions, err := tssModel.GetAllByExternalIDs(ctx, []string{p.ID})
 			require.NoError(t, err)
 			require.Len(t, transactions, 1)
 			tx := transactions[0]
 			assert.Equal(t, txSubStore.TransactionStatusPending, tx.Status)
 			assert.Equal(t, p.Asset.Code, tx.AssetCode)
 			assert.Equal(t, p.Asset.Issuer, tx.AssetIssuer)
-			assert.Equal(t, p.Amount, strconv.FormatFloat(tx.Amount, 'f', 7, 32))
+			assert.Equal(t, p.Amount, tx.Amount.StringFixed(7))
 			assert.Equal(t, p.ReceiverWallet.StellarAddress, tx.Destination)
 			assert.Equal(t, p.ID, tx.ExternalID)
 			assert.Equal(t, "tenant-id", tx.TenantID)

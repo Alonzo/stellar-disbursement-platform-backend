@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/support/render/httpjson"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/support/render/httpjson"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/data"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/message"
@@ -87,7 +87,10 @@ func (h ReceiverSendOTPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request
 	receiverSendOTPRequest.Email = utils.TrimAndLower(receiverSendOTPRequest.Email)
 
 	// validating reCAPTCHA Token if it is enabled
-	if !h.ReCAPTCHADisabled {
+	if !IsCAPTCHADisabled(ctx, CAPTCHAConfig{
+		Models:            h.Models,
+		ReCAPTCHADisabled: h.ReCAPTCHADisabled,
+	}) {
 		isValid, tokenErr := h.ReCAPTCHAValidator.IsTokenValid(ctx, receiverSendOTPRequest.ReCAPTCHAToken)
 		if tokenErr != nil {
 			httperror.InternalError(ctx, "Cannot validate reCAPTCHA token", tokenErr, nil).WithErrorCode(httperror.Code500_5).Render(w)
@@ -271,8 +274,8 @@ func (h ReceiverSendOTPHandler) recordRegistrationAttempt(
 		AttemptTS:     time.Now(),
 		ClientDomain:  claims.ClientDomain(),
 		TransactionID: claims.TransactionID(),
-		WalletAddress: claims.SEP10StellarAccount(),
-		WalletMemo:    claims.SEP10StellarMemo(),
+		WalletAddress: claims.Account(),
+		WalletMemo:    claims.Memo(),
 	}
 
 	switch contactType {

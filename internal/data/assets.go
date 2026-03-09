@@ -5,13 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/protocols/horizon/base"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 )
@@ -32,10 +31,10 @@ func AssetColumnNames(tableReference, resultAlias string, includeDates bool) str
 	}
 
 	columns := SQLColumnConfig{
-		TableReference:  tableReference,
-		ResultAlias:     resultAlias,
-		RawColumns:      cols,
-		CoalesceColumns: []string{"issuer"},
+		TableReference:        tableReference,
+		ResultAlias:           resultAlias,
+		RawColumns:            cols,
+		CoalesceStringColumns: []string{"issuer"},
 	}.Build()
 
 	return strings.Join(columns, ",\n")
@@ -44,15 +43,15 @@ func AssetColumnNames(tableReference, resultAlias string, includeDates bool) str
 // IsNative returns true if the asset is the native asset (XLM).
 func (a Asset) IsNative() bool {
 	return strings.TrimSpace(a.Issuer) == "" &&
-		slices.Contains([]string{"XLM", "NATIVE"}, strings.ToUpper(a.Code))
+		(a.Code == "XLM" || a.Code == "NATIVE")
 }
 
-// Equals returns true if the asset is the same as the other asset. Case-insensitive.
+// Equals returns true if the asset is the same as the other asset.
 func (a Asset) Equals(other Asset) bool {
 	if a.IsNative() && other.IsNative() {
 		return true
 	}
-	return strings.EqualFold(a.Code, other.Code) && strings.EqualFold(a.Issuer, other.Issuer)
+	return a.Code == other.Code && strings.EqualFold(a.Issuer, other.Issuer)
 }
 
 func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
@@ -60,7 +59,7 @@ func (a Asset) EqualsHorizonAsset(horizonAsset base.Asset) bool {
 		return true
 	}
 
-	return strings.EqualFold(a.Code, horizonAsset.Code) && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
+	return a.Code == horizonAsset.Code && strings.EqualFold(a.Issuer, horizonAsset.Issuer)
 }
 
 func (a Asset) ToBasicAsset() txnbuild.Asset {
@@ -254,10 +253,11 @@ func (a *AssetModel) SoftDelete(ctx context.Context, sqlExec db.SQLExecuter, id 
 }
 
 type ReceiverWalletAsset struct {
-	WalletID                                    string         `db:"wallet_id"`
-	ReceiverWallet                              ReceiverWallet `db:"receiver_wallet"`
-	Asset                                       Asset          `db:"asset"`
-	DisbursementReceiverRegistrationMsgTemplate *string        `json:"-" db:"receiver_registration_message_template"`
+	WalletID                                    string           `db:"wallet_id"`
+	ReceiverWallet                              ReceiverWallet   `db:"receiver_wallet"`
+	Asset                                       Asset            `db:"asset"`
+	DisbursementReceiverRegistrationMsgTemplate *string          `json:"-" db:"receiver_registration_message_template"`
+	VerificationField                           VerificationType `db:"verification_field"`
 }
 
 // GetAssetsPerReceiverWallet returns the assets associated with a READY payment for each receiver
@@ -276,6 +276,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 				p.id AS payment_id,
 				rw.wallet_id,
 				COALESCE(d.receiver_registration_message_template, '') as receiver_registration_message_template,
+				COALESCE(d.verification_field::text, '') as verification_field,
 				p.asset_id
 			FROM
 				payments p
@@ -285,7 +286,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 			WHERE
 				p.status = $1
 			GROUP BY
-				p.id, p.asset_id, rw.wallet_id, d.receiver_registration_message_template
+				p.id, p.asset_id, rw.wallet_id, d.receiver_registration_message_template, d.verification_field
 			ORDER BY
 				p.updated_at DESC
 		), messages_resent_since_invitation AS (
@@ -311,6 +312,7 @@ func (a *AssetModel) GetAssetsPerReceiverWallet(ctx context.Context, receiverWal
 		SELECT DISTINCT
 			lpw.wallet_id,
 			lpw.receiver_registration_message_template,
+			lpw.verification_field,
 			rw.id AS "receiver_wallet.id",
 			rw.invitation_sent_at AS "receiver_wallet.invitation_sent_at",
 			COALESCE(mrsi.total_invitation_resent_attempts, 0) AS "receiver_wallet.total_invitation_resent_attempts",

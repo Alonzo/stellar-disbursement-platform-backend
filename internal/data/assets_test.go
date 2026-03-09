@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stellar/go/protocols/horizon/base"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon/base"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -112,10 +112,11 @@ func Test_Asset_Equals(t *testing.T) {
 	}{
 		{Asset{Code: "XLM"}, Asset{Code: "XLM"}, true},
 		{Asset{Code: "NATIVE"}, Asset{Code: "XLM"}, true},
-		{Asset{Code: "XLM"}, Asset{Code: "xlm"}, true},
+		{Asset{Code: "NATIVE"}, Asset{Code: "native"}, false},
+		{Asset{Code: "XLM"}, Asset{Code: "xlm"}, false},
 		{Asset{Code: "XLM"}, Asset{Code: "ABC"}, false},
-		{Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, true},
-		{Asset{Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, true},
+		{Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "usdc"}, false},
+		{Asset{Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, Asset{Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5", Code: "USDC"}, true},
 		{Asset{Issuer: "Issuer1", Code: "ABC"}, Asset{Issuer: "Issuer2", Code: "ABC"}, false},
 		{Asset{Issuer: "Issuer1", Code: "ABC"}, Asset{Issuer: "Issuer1", Code: "XYZ"}, false},
 	}
@@ -138,16 +139,16 @@ func Test_Asset_EqualsHorizonAsset(t *testing.T) {
 		expectedResult bool
 	}{
 		{
-			name:           "🟢 native assets",
+			name:           "🟢 XLM alias is equal to native type",
 			localAsset:     Asset{Code: "XLM"},
 			horizonAsset:   base.Asset{Type: "native"},
 			expectedResult: true,
 		},
 		{
-			name:           "🟢 native asset 2",
-			localAsset:     Asset{Code: "NATIVE"},
+			name:           "🔴 xlm alias is not equal to native type",
+			localAsset:     Asset{Code: "xlm"},
 			horizonAsset:   base.Asset{Type: "native"},
-			expectedResult: true,
+			expectedResult: false,
 		},
 		{
 			name:           "🟢 issued assets are equal",
@@ -156,31 +157,43 @@ func Test_Asset_EqualsHorizonAsset(t *testing.T) {
 			expectedResult: true,
 		},
 		{
-			name:           "🟢 issued assets are equal2",
-			localAsset:     Asset{Code: "usdc", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
-			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USdc", Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			name:           "🟢 issued assets with different case in issuer are equal",
+			localAsset:     Asset{Code: "USDC", Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			expectedResult: true,
 		},
 		{
-			name:           "🔴 native asset != issued asset",
-			localAsset:     Asset{Code: "XLM"},
-			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "NATIVE", Issuer: "issuer"},
+			name:           "🔴 issued assets with different case in code are not equal",
+			localAsset:     Asset{Code: "usdc", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
+			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USdc", Issuer: "gbbD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			expectedResult: false,
 		},
 		{
-			name:           "🔴 issued asset != native asset",
+			name:           "🟢 NATIVE asset alias is equal to native type",
+			localAsset:     Asset{Code: "NATIVE"},
+			horizonAsset:   base.Asset{Type: "native"},
+			expectedResult: true,
+		},
+		{
+			name:           "🔴 native asset alias is not equal to native type",
+			localAsset:     Asset{Code: "native"},
+			horizonAsset:   base.Asset{Type: "native"},
+			expectedResult: false,
+		},
+		{
+			name:           "🔴 issued asset is not equal to native asset",
 			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			horizonAsset:   base.Asset{Type: "native"},
 			expectedResult: false,
 		},
 		{
-			name:           "🔴 issued asset != issued asset",
+			name:           "🔴 issued asset is not equal to issued asset with different code",
 			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "EUROC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			expectedResult: false,
 		},
 		{
-			name:           "🔴 issued asset != issued asset 2",
+			name:           "🔴 issued asset is not equal to issued asset with different issuer",
 			localAsset:     Asset{Code: "USDC", Issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"},
 			horizonAsset:   base.Asset{Type: "credit_alphanum4", Code: "USDC", Issuer: "another-issuer"},
 			expectedResult: false,
@@ -460,7 +473,7 @@ func Test_AssetModel_Insert(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "")
-		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.ErrorContains(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 	})
 
@@ -468,11 +481,11 @@ func Test_AssetModel_Insert(t *testing.T) {
 		DeleteAllAssetFixtures(t, ctx, dbConnectionPool)
 
 		asset, err := assetModel.Insert(ctx, dbConnectionPool, "USDC", "INVALID")
-		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.ErrorContains(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 
 		asset, err = assetModel.Insert(ctx, dbConnectionPool, "XLM", "INVALID")
-		assert.EqualError(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
+		assert.ErrorContains(t, err, `error inserting asset: pq: new row for relation "assets" violates check constraint "asset_issuer_length_check"`)
 		assert.Nil(t, asset)
 	})
 }
@@ -491,7 +504,7 @@ func Test_AssetModelGetOrCreate(t *testing.T) {
 
 	t.Run("returns error when issuer is invalid", func(t *testing.T) {
 		asset, err := assetModel.GetOrCreate(ctx, "FOO1", "invalid_issuer")
-		require.EqualError(t, err, "error getting or creating asset: pq: new row for relation \"assets\" violates check constraint \"asset_issuer_length_check\"")
+		require.ErrorContains(t, err, "error getting or creating asset: pq: new row for relation \"assets\" violates check constraint \"asset_issuer_length_check\"")
 		assert.Empty(t, asset)
 	})
 
@@ -567,48 +580,56 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template A1",
+		VerificationField:                   VerificationTypeDateOfBirth,
 	})
 	disbursementA2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletA,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template A2",
+		VerificationField:                   VerificationTypeNationalID,
 	})
 	disbursementB1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletB,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template B1",
+		VerificationField:                   VerificationTypePin,
 	})
 	disbursementB2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletB,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template B2",
+		VerificationField:                   VerificationTypeYearMonth,
 	})
 	disbursementC1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletC,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template C1",
+		VerificationField:                   VerificationTypeDateOfBirth,
 	})
 	disbursementC2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletC,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template C2",
+		VerificationField:                   VerificationTypeNationalID,
 	})
 	disbursementD1 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletD,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset1,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template D1",
+		VerificationField:                   VerificationTypePin,
 	})
 	disbursementD2 := CreateDisbursementFixture(t, ctx, dbConnectionPool, models.Disbursements, &Disbursement{
 		Wallet:                              walletD,
 		Status:                              ReadyDisbursementStatus,
 		Asset:                               asset2,
 		ReceiverRegistrationMessageTemplate: "Disbursement SMS Registration Message Template D2",
+		VerificationField:                   VerificationTypeYearMonth,
 	})
 
 	// 2. Create receivers, and receiver wallets:
@@ -771,6 +792,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 			WalletID: walletA.ID,
 			Asset:    *asset1,
 			DisbursementReceiverRegistrationMsgTemplate: &disbursementA1.ReceiverRegistrationMessageTemplate,
+			VerificationField: disbursementA1.VerificationField,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -785,6 +807,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 			WalletID: walletA.ID,
 			Asset:    *asset2,
 			DisbursementReceiverRegistrationMsgTemplate: &disbursementA2.ReceiverRegistrationMessageTemplate,
+			VerificationField: disbursementA2.VerificationField,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -798,6 +821,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 			WalletID: walletB.ID,
 			Asset:    *asset1,
 			DisbursementReceiverRegistrationMsgTemplate: &disbursementB1.ReceiverRegistrationMessageTemplate,
+			VerificationField: disbursementB1.VerificationField,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -811,6 +835,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 			WalletID: walletB.ID,
 			Asset:    *asset2,
 			DisbursementReceiverRegistrationMsgTemplate: &disbursementB2.ReceiverRegistrationMessageTemplate,
+			VerificationField: disbursementB2.VerificationField,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -824,6 +849,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 			WalletID: walletC.ID,
 			Asset:    *asset1,
 			DisbursementReceiverRegistrationMsgTemplate: &disbursementC1.ReceiverRegistrationMessageTemplate,
+			VerificationField: disbursementC1.VerificationField,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -837,6 +863,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 			WalletID: walletC.ID,
 			Asset:    *asset2,
 			DisbursementReceiverRegistrationMsgTemplate: &disbursementC2.ReceiverRegistrationMessageTemplate,
+			VerificationField: disbursementC2.VerificationField,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -850,6 +877,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 			WalletID: walletD.ID,
 			Asset:    *asset1,
 			DisbursementReceiverRegistrationMsgTemplate: &disbursementD1.ReceiverRegistrationMessageTemplate,
+			VerificationField: disbursementD1.VerificationField,
 		},
 		{
 			ReceiverWallet: ReceiverWallet{
@@ -863,6 +891,7 @@ func Test_GetAssetsPerReceiverWallet(t *testing.T) {
 			WalletID: walletD.ID,
 			Asset:    *asset2,
 			DisbursementReceiverRegistrationMsgTemplate: &disbursementD2.ReceiverRegistrationMessageTemplate,
+			VerificationField: disbursementD2.VerificationField,
 		},
 	}
 

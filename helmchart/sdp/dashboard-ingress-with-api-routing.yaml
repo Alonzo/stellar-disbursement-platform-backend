@@ -11,11 +11,11 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # Enable CORS for API endpoints - allow OPTIONS requests
+    # Enable CORS for API endpoints (production only)
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://sdp.lomalo.app"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    nginx.ingress.kubernetes.io/cors-allow-headers: "*"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, SDP-Tenant-Name, Device-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     # Route static asset files (CSS, JS, etc.) to dashboard
     # Also route SPA detail pages (browser navigation) to dashboard

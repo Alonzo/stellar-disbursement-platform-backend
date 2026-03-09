@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
 	"github.com/stellar/stellar-disbursement-platform-backend/internal/utils"
@@ -124,7 +124,7 @@ func DisbursementColumnNames(tableReference, resultAlias string) string {
 			"updated_at",
 			"registration_contact_type",
 		},
-		CoalesceColumns: []string{
+		CoalesceStringColumns: []string{
 			"id",
 			"name",
 			"status::text",

@@ -136,7 +136,7 @@ sdp:
       AWS_REGION: "us-west-2"  # AWS region for SES
       AWS_SES_SENDER_ID: "noreply@sdp.lomalo.app"  # Verified domain - can use any email under sdp.lomalo.app
       
-      ## CORS configuration
+      ## CORS configuration (production only)
       CORS_ALLOWED_ORIGINS: "https://sdp.lomalo.app"
       
       ## ReCaptcha configuration (production keys from AWS Secrets Manager: sdp/prod/recaptcha/*)

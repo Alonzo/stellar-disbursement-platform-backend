@@ -1,56 +1,35 @@
-# Old artifacts (don't commit these)
-*.log
-security-audit-*/
-
-# Local-only files (keep local, never commit)
-# Use wildcards to avoid exposing specific file names
-.github/workflows/*.md
-.github/workflows/*.sh
-*.md
-!README.md
-!CHANGELOG.md
-!CONTRIBUTING.md
-!LICENSE
-
-# OS files
-.DS_Store
-*.swp
-*~
-.vscode/
-.idea/
-
-# Go
+# Binaries for programs and plugins
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-*.test
-*.out
-go.work
 
-# Temporary files
-*.tmp
-*.bak
-*.backup
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
 
 # Environment files
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
-# Build artifacts
-dist/
-build/
-bin/
+# subproject used for testing:
+v1_compatibility/stellar-relief-backoffice-backend
 
-# Test coverage
-*.out
-coverage.html
+# Project binary:
+stellar-disbursement-platform-backend
 
-# Helm
-*.tgz
-.helm/
+# Text Editors
+.vscode
+.idea
+.cursor
 
-# Kubernetes
-*.kubeconfig
+# Local HTTPS certificates
+dev/certs/
+
+# Rust & Soroban
+target/
+test_snapshots/

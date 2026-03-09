@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stellar/go/support/log"
+	"github.com/stellar/go-stellar-sdk/support/log"
 	"golang.org/x/exp/maps"
 
 	"github.com/stellar/stellar-disbursement-platform-backend/db"
@@ -119,7 +119,7 @@ func (di DisbursementInstructionModel) ProcessAll(ctx context.Context, dbTx db.D
 			}
 			return fmt.Errorf("registering supplied wallets: %w", err)
 		}
-	} else {
+	} else if opts.Disbursement.VerificationField != "" {
 		err = di.processReceiverVerifications(ctx, dbTx, receiversByIDMap, opts.Instructions, opts.Disbursement, registrationContactType.ReceiverContactType)
 		if err != nil {
 			return fmt.Errorf("processing receiver verifications: %w", err)

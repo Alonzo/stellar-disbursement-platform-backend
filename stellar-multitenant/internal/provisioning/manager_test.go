@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stellar/go/clients/horizonclient"
-	"github.com/stellar/go/keypair"
-	"github.com/stellar/go/network"
-	"github.com/stellar/go/protocols/horizon"
-	"github.com/stellar/go/support/log"
-	"github.com/stellar/go/txnbuild"
+	"github.com/stellar/go-stellar-sdk/clients/horizonclient"
+	"github.com/stellar/go-stellar-sdk/keypair"
+	"github.com/stellar/go-stellar-sdk/network"
+	"github.com/stellar/go-stellar-sdk/protocols/horizon"
+	"github.com/stellar/go-stellar-sdk/support/log"
+	"github.com/stellar/go-stellar-sdk/txnbuild"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -470,8 +470,10 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"circle_recipients",
 		"circle_transfer_requests",
 		"disbursements",
+		"embedded_wallets",
 		"messages",
 		"organizations",
+		"passkey_sessions",
 		"payments",
 		"receiver_verifications",
 		"receiver_verifications_audit",
@@ -481,9 +483,11 @@ func getExpectedTablesAfterMigrationsApplied() []string {
 		"receivers_audit",
 		"sdp_migrations",
 		"short_urls",
+		"sponsored_transactions",
 		"wallets",
 		"wallets_assets",
 		"receiver_registration_attempts",
+		"sep_nonces",
 		"api_keys",
 		"api_keys_audit",
 	}
@@ -777,6 +781,15 @@ func Test_Manager_RollbackOnErrors(t *testing.T) {
 				assert.ErrorContains(t, err, tc.expectedErr.Error())
 			} else {
 				require.NoError(t, err)
+
+				// Verify that the organization has link shortener enabled by default
+				tenantSchemaConnectionPool, models, connErr := GetTenantSchemaDBConnectionAndModels(tenantDSN)
+				require.NoError(t, connErr)
+				defer tenantSchemaConnectionPool.Close()
+
+				org, orgErr := models.Organizations.Get(ctx)
+				require.NoError(t, orgErr)
+				assert.True(t, org.IsLinkShortenerEnabled, "link shortener should be enabled by default for new tenants")
 			}
 
 			mHorizonClient.AssertExpectations(t)
