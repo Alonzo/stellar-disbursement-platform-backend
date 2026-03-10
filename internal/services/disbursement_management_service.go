@@ -94,11 +94,12 @@ func (s *DisbursementManagementService) AppendUserMetadata(ctx context.Context, 
 
 	usersList, err := s.AuthManager.GetUsersByID(ctx, maps.Keys(users), false)
 	if err != nil {
-		return nil, fmt.Errorf("error getting user for IDs: %w", err)
-	}
-
-	for _, u := range usersList {
-		users[u.ID] = u
+		// Log but do not fail: allow draft detail to load when user metadata (created_by/started_by) is unavailable
+		log.Ctx(ctx).Warnf("AppendUserMetadata: GetUsersByID failed, returning disbursement without user metadata: %v", err)
+	} else {
+		for _, u := range usersList {
+			users[u.ID] = u
+		}
 	}
 
 	response := make([]*DisbursementWithUserMetadata, len(disbursements))
