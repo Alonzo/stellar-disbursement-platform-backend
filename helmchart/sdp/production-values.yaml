@@ -281,9 +281,9 @@ dashboard:
     mtnDomain: ""  # Not using multi-tenant
     port: "80"
 
-  ## Docker image configuration
+  ## Docker image configuration (ECR; frontend workflow overrides with commit SHA on deploy)
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:5.0.0
+    fullName: 084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-frontend:latest
     pullPolicy: Always
 
   ## Deployment configuration
