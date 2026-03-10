@@ -122,8 +122,8 @@ jobs:
         id: dashboard-image
         run: |
           IMG=$(kubectl get deployment sdp-prod-dashboard -n default -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
-          # Fallback to ECR latest if cluster not ready
-          IMG=${IMG:-084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-frontend:latest}
+          # Fallback to ECR latest if cluster not ready or kubectl failed (strip whitespace/newlines)
+          IMG=$(echo -n "${IMG:-084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-frontend:latest}" | tr -d '\n\r')
           echo "image=$IMG" >> $GITHUB_OUTPUT
           echo "Current dashboard image: $IMG"
 
