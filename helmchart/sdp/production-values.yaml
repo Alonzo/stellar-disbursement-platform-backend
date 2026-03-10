@@ -279,9 +279,9 @@ dashboard:
     mtnDomain: "*.sdp.lomalo.app"  # Multi-tenant: missa.sdp.lomalo.app, rewards.sdp.lomalo.app
     port: "80"
 
-  ## Docker image configuration
+  ## Docker image configuration (use ECR so backend-only deploys do not revert to upstream)
   image:
-    fullName: stellar/stellar-disbursement-platform-frontend:5.0.0
+    fullName: 084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-frontend:latest
     pullPolicy: Always
 
   ## Deployment configuration

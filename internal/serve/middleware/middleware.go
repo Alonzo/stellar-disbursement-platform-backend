@@ -318,7 +318,7 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 					return
 				}
 			} else {
-				// Attempt fetching tenant name from request
+				// Attempt fetching tenant name from request (subdomain, e.g. missa.sdp.lomalo.app -> missa)
 				tenantName, err := extractTenantNameFromRequest(req)
 				if err != nil {
 					if errors.Is(err, utils.ErrHostnameIsIPAddress) {
@@ -329,7 +329,16 @@ func ResolveTenantFromRequestMiddleware(tenantManager tenant.ManagerInterface, s
 				} else if tenantName != "" {
 					currentTenant, err = tenantManager.GetTenantByName(ctx, tenantName)
 					if err != nil {
-						log.Ctx(ctx).Warnf("could not find tenant with name %s: %v", tenantName, err)
+						// Fallback: existing prod tenant may have been created as "default" (ensure-default); allow subdomain "missa" to use it
+						if tenantName == "missa" {
+							currentTenant, err = tenantManager.GetDefault(ctx)
+							if err == nil {
+								log.Ctx(ctx).Debugf("subdomain missa mapped to default tenant %s", currentTenant.ID)
+							}
+						}
+						if err != nil && currentTenant == nil {
+							log.Ctx(ctx).Warnf("could not find tenant with name %s: %v", tenantName, err)
+						}
 					}
 				}
 			}

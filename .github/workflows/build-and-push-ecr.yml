@@ -116,6 +116,17 @@ jobs:
         run: |
           aws eks update-kubeconfig --name floral-bluegrass-outfit --region ${{ env.AWS_REGION }}
       
+      # Preserve current dashboard image (backend workflow only updates backend; do not revert dashboard to values file)
+      - name: Get current dashboard image
+        if: github.event_name != 'pull_request'
+        id: dashboard-image
+        run: |
+          IMG=$(kubectl get deployment sdp-prod-dashboard -n default -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
+          # Fallback to ECR latest if cluster not ready
+          IMG=${IMG:-084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-frontend:latest}
+          echo "image=$IMG" >> $GITHUB_OUTPUT
+          echo "Current dashboard image: $IMG"
+
       # Deploy to production using Helm
       - name: Deploy to production
         if: github.event_name != 'pull_request'
@@ -128,11 +139,12 @@ jobs:
             sleep 5
           fi
           
-          # Deploy with atomic flag for automatic rollback on failure
+          # Deploy with atomic flag for automatic rollback on failure (preserve dashboard image)
           helm upgrade sdp-prod helmchart/sdp \
             --namespace default \
             -f helmchart/sdp/production-values.yaml \
             --set sdp.image.tag=${{ github.sha }} \
+            --set dashboard.image.fullName=${{ steps.dashboard-image.outputs.image }} \
             --wait \
             --timeout 5m \
             --atomic
