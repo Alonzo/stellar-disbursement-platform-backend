@@ -31,7 +31,7 @@ The SDP now includes native implementations of SEP10 and SEP24 protocols, provid
 
 ### Production deployment (M1 / sdp.lomalo.app)
 
-For how production is deployed (backend and frontend repos, ECR images, and manual upgrade), see [docs/PRODUCTION_DEPLOY.md](../../docs/PRODUCTION_DEPLOY.md) in the repo root.
+For how production is deployed (backend and frontend repos, ECR images, and manual upgrade), see [docs/PRODUCTION_DEPLOY.md](../../docs/PRODUCTION_DEPLOY.md) in the repo root. The same doc includes **adding a new tenant** (DNS, ingress, `tenants create`, adding users) for multi-tenant setups.
 
 ## Installing the Chart
 

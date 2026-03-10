@@ -239,6 +239,40 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 		log.Fatalf("Error initializing config: %s", err)
 	}
 
+	// tenants list: print tenant id, name, base_url (for use with auth add-user --tenant-id)
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List tenants (id, name, base_url)",
+		Long:  "Prints tenant ID, name, and base URL for all tenants. Use the ID with auth add-user --tenant-id.",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+			defer cancel()
+			adminPool, _, _, err := initDBPools(ctx, globalOptions.DatabaseURL)
+			if err != nil {
+				return err
+			}
+			defer di.CleanupInstanceByValue(ctx, adminPool)
+			tm := tenant.NewManager(tenant.WithDatabase(adminPool), tenant.WithSingleTenantMode(true))
+			tenants, err := tm.GetAllTenants(ctx, nil)
+			if err != nil {
+				return fmt.Errorf("listing tenants: %w", err)
+			}
+			for _, t := range tenants {
+				base := ""
+				if t.BaseURL != nil {
+					base = *t.BaseURL
+				}
+				log.Ctx(ctx).Infof("%s\t%s\t%s", t.ID, t.Name, base)
+			}
+			return nil
+		},
+	}
+	tenantsRoot.AddCommand(listCmd)
+
 	// tenants create: provision a new tenant via ProvisioningManager (no Admin API)
 	createCfg := CreateTenantConfig{}
 	createConfigOpts := config.ConfigOptions{
