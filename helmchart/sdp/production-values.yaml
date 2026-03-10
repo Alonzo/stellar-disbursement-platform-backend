@@ -1,0 +1,336 @@
+## Production values for the Stellar Disbursement Platform (SDP) Backend.
+## Repo: https://github.com/stellar/stellar-disbursement-platform-backend
+##
+## This is a YAML-formatted file for production deployment on EKS.
+
+# =========================== START global ===========================
+global:
+  ## Set to true for mainnet (public network), false for testnet
+  isPubnet: true  # MAINNET: Changed from false to true
+
+  ## Number of replicas for the application (reduced for cost optimization)
+  replicaCount: 1
+
+  ## Resource limits and requests for the application pods (reduced for cost optimization)
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+  ## Kubernetes Service type
+  service:
+    type: ClusterIP
+
+  ## Autoscaling configuration (disabled for cost optimization)
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 2
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  ## Service Account with IRSA annotation for AWS IAM role
+  serviceAccount:
+    create: true
+    name: sdp-core
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::084034390838:role/sdp-core-irsa
+
+  ## Deployment configuration
+  deployment:
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
+
+  ## Disable ephemeral database (using RDS)
+  ephemeralDatabase: false
+
+  ## Disable auto-generated secrets (using AWS Secrets Manager)
+  autoGenerateSecrets: false
+
+  ## Multi-tenant mode: missa.sdp.lomalo.app, rewards.sdp.lomalo.app
+  singleTenantMode: false
+
+  ## Stellar distribution account keys (stored in AWS Secrets Manager)
+  ## These will be read from secrets via environment variables
+  distributionPublicKey: # Will be set from secrets
+  distributionPrivateKey: # Will be set from secrets
+
+  ## SEP-10 keys (stored in AWS Secrets Manager)
+  sep10PublicKey: # Will be set from secrets
+  sep10PrivateKey: # Will be set from secrets
+
+  ## ReCaptcha configuration (production keys)
+  recaptchaSiteKey: 6Ler9QosAAAAANi6hHazk75jfmEQJWZR1_yB0-X-
+  recaptchaSiteSecretKey: 6Ler9QosAAAAAFR9rOlh5mo6wC8Eep5_dJMhda7v
+
+  ## Bridge integration (disabled)
+  bridgeIntegration:
+    enabled: false
+    baseUrl: https://api.bridge.xyz
+    apiKey: ""
+
+# =========================== START sdp ===========================
+sdp:
+  ## Route configuration
+  route:
+    schema: "https"
+    domain: "sdp.lomalo.app"
+    mtnDomain: "*.sdp.lomalo.app"  # Multi-tenant: missa.sdp.lomalo.app, rewards.sdp.lomalo.app
+    adminDomain: ""  # Admin API disabled for now (do not expose)
+    port: 8000
+    metricsPort: 8002
+    adminPort: 8003
+
+  ## Docker image configuration
+  image:
+    repository: 084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-backend
+    pullPolicy: Always
+    tag: "latest-csp-fix-amd64"  # CSP fix for reCAPTCHA cross-origin issues
+
+  ## Deployment configuration
+  deployment:
+    annotations: {}
+    podAnnotations: {}
+    podSecurityContext: {}
+    securityContext: {}
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+    resources: {}  # Uses global.resources
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
+
+  ## ConfigMap configuration
+  configMap:
+    annotations: {}
+    data:
+      ## Environment configuration
+      ENVIRONMENT: "production"
+      LOG_LEVEL: "INFO"
+      INSTANCE_NAME: "SDP Production on Mainnet"  # MAINNET: Updated from Testnet
+      CRASH_TRACKER_TYPE: "DRY_RUN"  # Set to SENTRY if Sentry is configured
+      
+      ## Stellar configuration (MAINNET)
+      NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"  # MAINNET: Changed from testnet
+      HORIZON_URL: "https://horizon.stellar.org"  # MAINNET: Changed from testnet
+      DISTRIBUTION_PUBLIC_KEY: "GBVKJVVNICHHOD6G7JNAGOZKP2LQI2KGICEVVRKXN37LQKYGMCAK72VY"  # MAINNET: Production distribution account
+      SEP10_SIGNING_PUBLIC_KEY: "GBQURZZN7W5SWLEVIB3GSVSQ6OXHEAVY5WJHPIXM6SSTFUPMI6CLXWJ7"  # MAINNET: Production SEP-10 signing key
+      
+      ## Metrics configuration
+      METRICS_TYPE: "PROMETHEUS"
+      
+      ## Messaging configuration
+      EMAIL_SENDER_TYPE: "AWS_EMAIL"  # Using AWS SES for email sending
+      SMS_SENDER_TYPE: "DRY_RUN"  # Set to AWS_SMS when SNS is configured
+      AWS_REGION: "us-west-2"  # AWS region for SES
+      AWS_SES_SENDER_ID: "noreply@sdp.lomalo.app"  # Verified domain - can use any email under sdp.lomalo.app
+      
+      ## CORS configuration (production: tenant subdomains only; legacy sdp.lomalo.app removed per CTO)
+      CORS_ALLOWED_ORIGINS: "https://missa.sdp.lomalo.app,https://rewards.sdp.lomalo.app"
+      
+      ## ReCaptcha configuration (production keys from AWS Secrets Manager: sdp/prod/recaptcha/*)
+      RECAPTCHA_SITE_KEY: "6Ler9QosAAAAANi6hHazk75jfmEQJWZR1_yB0-X-"
+      RECAPTCHA_SITE_SECRET_KEY: "6Ler9QosAAAAAFR9rOlh5mo6wC8Eep5_dJMhda7v"
+      
+      ## Feature flags
+      DISABLE_RECAPTCHA: "false"  # Re-enabled after password setup
+      DISABLE_MFA: "false"  # Re-enabled after OIDC provider fix
+      
+      ## Scheduler configuration
+      SCHEDULER_PAYMENT_JOB_SECONDS: "10"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      MAX_INVITATION_RESEND_ATTEMPTS: "3"
+      TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
+      
+      ## Circle API configuration
+      CIRCLE_API_TYPE: "TRANSFERS"
+      
+      ## Anchor Platform configuration (deprecated in 5.0.0, but still required by validation)
+      ## Set to dummy values since SDP now has native SEP-10/SEP-24 support and doesn't use Anchor Platform
+      ANCHOR_PLATFORM_BASE_PLATFORM_URL: "https://dummy.anchor.platform"  # Not used, but required by config validation in 5.0.0
+      ANCHOR_PLATFORM_BASE_SEP_URL: "https://dummy.anchor.sep"  # Not used, but required by config validation in 5.0.0
+      ANCHOR_PLATFORM_OUTGOING_JWT_SECRET: "dummy-jwt-secret-for-anchor-platform"  # Not used, but required by config validation in 5.0.0
+      
+      ## Database connection pool configuration
+      DB_MAX_OPEN_CONNS: "20"
+      DB_MAX_IDLE_CONNS: "2"
+      DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
+      DB_CONN_MAX_LIFETIME_SECONDS: "300"
+
+  ## Kubernetes secrets configuration
+  ## Note: Secrets will be read from AWS Secrets Manager via IRSA
+  ## The application should be configured to read from AWS Secrets Manager
+  kubeSecrets:
+    secretName: sdp-prod-backend-secrets
+    create: false  # We'll use External Secrets Operator or AWS Secrets Manager
+    annotations: {}
+    data: {}
+      ## These will be populated from AWS Secrets Manager:
+      ## DATABASE_URL: from sdp/prod/db/url
+      ## SEP10_SIGNING_PRIVATE_KEY: from sdp/prod/sep10/private
+      ## SEP24_JWT_SECRET: from sdp/prod/sep24/jwtSecret
+      ## EC256_PRIVATE_KEY: from sdp/prod/ec256/private
+      ## ADMIN_ACCOUNT: from sdp/prod/admin/account
+      ## ADMIN_API_KEY: from sdp/prod/admin/apiKey
+      ## DISTRIBUTION_SEED: from sdp/prod/distribution/seed
+      ## DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: from sdp/prod/distribution/encryptionPassphrase
+      ## CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: from sdp/prod/channel/encryptionPassphrase
+
+  ## Ingress configuration (disabled - dashboard ingress will handle routing)
+  ## The dashboard ingress will serve the UI and route API calls to the backend
+  ingress:
+    enabled: false  # Disabled - dashboard ingress handles all routing
+    className: nginx
+    annotations: {}
+    tls: []
+
+# =========================== START TSS ===========================
+tss:
+  enabled: true  # Re-enabled after distribution account funding
+
+  ## Route configuration
+  route:
+    schema: "https"
+    port: 9000
+    metricsPort: 9002
+
+  ## Docker image configuration
+  image:
+    repository: stellar/stellar-disbursement-platform-tss
+    pullPolicy: Always
+    tag: "5.0.0"  # Use official TSS image version
+
+  ## Deployment configuration
+  deployment:
+    annotations: {}
+    podAnnotations: {}
+    podSecurityContext: {}
+    securityContext: {}
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+    resources: {}  # Uses global.resources
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
+
+  ## ConfigMap configuration
+  configMap:
+    annotations: {}
+    data:
+      ## Monitoring and logging configuration
+      CRASH_TRACKER_TYPE: "DRY_RUN"  # Set to SENTRY if Sentry is configured
+      ENVIRONMENT: "production"
+      LOG_LEVEL: "INFO"
+      TSS_METRICS_TYPE: "TSS_PROMETHEUS"
+
+      ## Stellar configuration (MAINNET)
+      NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"  # MAINNET: Changed from testnet
+      HORIZON_URL: "https://horizon.stellar.org"  # MAINNET: Changed from testnet
+      DISTRIBUTION_PUBLIC_KEY: "GBVKJVVNICHHOD6G7JNAGOZKP2LQI2KGICEVVRKXN37LQKYGMCAK72VY"  # MAINNET: Production distribution account
+      NUM_CHANNEL_ACCOUNTS: "1"
+      MAX_BASE_FEE: "100000"
+
+      ## Background tasks configuration
+      QUEUE_POLLING_INTERVAL: "6"
+
+      ## Database connection pool tuning
+      DB_MAX_OPEN_CONNS: "20"
+      DB_MAX_IDLE_CONNS: "2"
+      DB_CONN_MAX_IDLE_TIME_SECONDS: "10"
+      DB_CONN_MAX_LIFETIME_SECONDS: "300"
+
+  ## Kubernetes secrets configuration
+  ## Note: Secrets will be read from AWS Secrets Manager via IRSA
+  kubeSecrets:
+    secretName: sdp-tss-secrets
+    create: false  # We'll use External Secrets Operator or AWS Secrets Manager
+    annotations: {}
+    data: {}
+      ## These will be populated from AWS Secrets Manager:
+      ## DATABASE_URL: from sdp/prod/db/url
+      ## DISTRIBUTION_SEED: from sdp/prod/distribution/seed
+      ## CHANNEL_ACCOUNT_ENCRYPTION_PASSPHRASE: from sdp/prod/channel/encryptionPassphrase
+      ## DISTRIBUTION_ACCOUNT_ENCRYPTION_PASSPHRASE: from sdp/prod/distribution/encryptionPassphrase
+
+# =========================== START Dashboard =====================
+dashboard:
+  enabled: true  # Enabled - dashboard UI for creating orgs/tenants
+
+  ## Route configuration
+  route:
+    schema: "https"
+    domain: "sdp.lomalo.app"  # Same domain as backend API
+    mtnDomain: "*.sdp.lomalo.app"  # Multi-tenant: missa.sdp.lomalo.app, rewards.sdp.lomalo.app
+    port: "80"
+
+  ## Docker image configuration
+  image:
+    fullName: stellar/stellar-disbursement-platform-frontend:5.0.0
+    pullPolicy: Always
+
+  ## Deployment configuration
+  deployment:
+    annotations: {}
+    podAnnotations: {}
+    podSecurityContext: {}
+    securityContext: {}
+    strategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 1
+        maxUnavailable: 0
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 128Mi
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    priorityClassName: ""
+    topologySpreadConstraints: []
+
+  ## ConfigMap configuration
+  configMap:
+    annotations: {}
+    data: {}
+      ## Environment variables for the dashboard frontend
+      ## These are injected into env-config.js
+
+  ## Ingress configuration (enabled with cert-manager for TLS)
+  ## NOTE: Disabled - using custom dashboard-ingress-with-api-routing.yaml instead
+  ## This custom ingress includes API routing paths to the backend
+  ingress:
+    enabled: false  # Using custom ingress with API routing
+    className: nginx
+    annotations:
+      # Use cert-manager with Let's Encrypt for automatic TLS certificates
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+      # Note: Dashboard and backend share the same domain
+      # The dashboard frontend will make API calls to the backend
+      # Both ingresses will coexist - nginx will route based on path priority
+    tls:
+      - hosts:
+          - sdp.lomalo.app
+        secretName: sdp-lomalo-app-tls  # Same TLS secret as backend (cert-manager will create it)
+
