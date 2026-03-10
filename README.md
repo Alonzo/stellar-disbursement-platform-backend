@@ -59,7 +59,7 @@ For more information about launching and configuring the SDP, see the [Quick Sta
 
 ### Helm
 
-To deploy the SDP using Helm, see the [Helm Chart](./helmchart/sdp/README.md).
+To deploy the SDP using Helm, see the [Helm Chart](./helmchart/sdp/README.md). For **production (sdp.lomalo.app)** deploy workflow, image sources, and how to verify or run a manual upgrade, see [docs/PRODUCTION_DEPLOY.md](./docs/PRODUCTION_DEPLOY.md).
 
 ## Secure Operation Manual
 

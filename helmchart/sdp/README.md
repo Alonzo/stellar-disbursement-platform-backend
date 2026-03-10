@@ -29,6 +29,10 @@ The SDP is a set of services that enable organizations to disburse funds to reci
 
 The SDP now includes native implementations of SEP10 and SEP24 protocols, providing wallet authentication and interactive deposit flows without requiring external Anchor Platform integration.
 
+### Production deployment (M1 / sdp.lomalo.app)
+
+For how production is deployed (backend and frontend repos, ECR images, and manual upgrade), see [docs/PRODUCTION_DEPLOY.md](../../docs/PRODUCTION_DEPLOY.md) in the repo root.
+
 ## Installing the Chart
 
 The chart can be installed either from a packaged chart or directly from the git repository.
