@@ -53,8 +53,8 @@ global:
   ## Disable auto-generated secrets (using AWS Secrets Manager)
   autoGenerateSecrets: false
 
-  ## Single-tenant mode (not multi-tenant)
-  singleTenantMode: true
+  ## Multi-tenant mode: missa.sdp.lomalo.app, rewards.sdp.lomalo.app
+  singleTenantMode: false
 
   ## Stellar distribution account keys (stored in AWS Secrets Manager)
   ## These will be read from secrets via environment variables
@@ -81,8 +81,8 @@ sdp:
   route:
     schema: "https"
     domain: "sdp.lomalo.app"
-    mtnDomain: ""  # Not using multi-tenant
-    adminDomain: ""  # Admin API disabled for now
+    mtnDomain: "*.sdp.lomalo.app"  # Multi-tenant: missa.sdp.lomalo.app, rewards.sdp.lomalo.app
+    adminDomain: ""  # Admin API disabled for now (do not expose)
     port: 8000
     metricsPort: 8002
     adminPort: 8003
@@ -136,12 +136,10 @@ sdp:
       AWS_REGION: "us-west-2"  # AWS region for SES
       AWS_SES_SENDER_ID: "noreply@sdp.lomalo.app"  # Verified domain - can use any email under sdp.lomalo.app
       
-      ## CORS configuration (production only)
-      CORS_ALLOWED_ORIGINS: "https://sdp.lomalo.app"
+      ## CORS configuration (production: tenant subdomains only; legacy sdp.lomalo.app removed per CTO)
+      CORS_ALLOWED_ORIGINS: "https://missa.sdp.lomalo.app,https://rewards.sdp.lomalo.app"
       
       ## ReCaptcha configuration (production keys from AWS Secrets Manager: sdp/prod/recaptcha/*)
-      ## Using v2 (checkbox) per MAINNET_PRODUCTION_CHECKLIST; no CAPTCHA_TYPE = backend default GOOGLE_RECAPTCHA_V2.
-      ## If script still fails: key may need sdp.lomalo.app in Google allowlist, or use test keys (see SDP_RECAPTCHA_SETUP.md).
       RECAPTCHA_SITE_KEY: "6Ler9QosAAAAANi6hHazk75jfmEQJWZR1_yB0-X-"
       RECAPTCHA_SITE_SECRET_KEY: "6Ler9QosAAAAAFR9rOlh5mo6wC8Eep5_dJMhda7v"
       
@@ -278,12 +276,12 @@ dashboard:
   route:
     schema: "https"
     domain: "sdp.lomalo.app"  # Same domain as backend API
-    mtnDomain: ""  # Not using multi-tenant
+    mtnDomain: "*.sdp.lomalo.app"  # Multi-tenant: missa.sdp.lomalo.app, rewards.sdp.lomalo.app
     port: "80"
 
-  ## Docker image configuration (ECR; frontend workflow overrides with commit SHA on deploy)
+  ## Docker image configuration
   image:
-    fullName: 084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-frontend:latest
+    fullName: stellar/stellar-disbursement-platform-frontend:5.0.0
     pullPolicy: Always
 
   ## Deployment configuration

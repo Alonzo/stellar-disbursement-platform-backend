@@ -58,6 +58,54 @@ func (c *DefaultTenantConfig) Validate() error {
 	return nil
 }
 
+// CreateTenantConfig holds configuration for creating a non-default tenant (e.g. rewards).
+type CreateTenantConfig struct {
+	Name                    string
+	OwnerEmail              string
+	OwnerFirstName          string
+	OwnerLastName           string
+	OrgName                 string
+	BaseURL                 string
+	UIBaseURL               string
+	DistributionAccountType string
+	DistributionPublicKey   string
+	DisableMFA              bool
+	DisableReCAPTCHA        bool
+}
+
+func (c *CreateTenantConfig) Validate() error {
+	if c.Name == "" {
+		return errors.New("missing name")
+	}
+	if c.OwnerEmail == "" {
+		return errors.New("missing owner-email")
+	}
+	if c.OwnerFirstName == "" {
+		return errors.New("missing owner-first-name")
+	}
+	if c.OwnerLastName == "" {
+		return errors.New("missing owner-last-name")
+	}
+	if c.OrgName == "" {
+		return errors.New("missing org-name")
+	}
+	if c.BaseURL == "" {
+		return errors.New("missing base-url")
+	}
+	if c.UIBaseURL == "" {
+		return errors.New("missing ui-base-url")
+	}
+	acctType := schema.AccountType(c.DistributionAccountType)
+	switch acctType {
+	case schema.DistributionAccountStellarDBVault,
+		schema.DistributionAccountStellarEnv,
+		schema.DistributionAccountCircleDBVault:
+	default:
+		return fmt.Errorf("invalid distribution account type: %s", c.DistributionAccountType)
+	}
+	return nil
+}
+
 type TenantsService interface {
 	EnsureDefaultTenant(ctx context.Context, cfg DefaultTenantConfig, opts cmdUtils.GlobalOptionsType) error
 }
@@ -190,6 +238,144 @@ func (cmd *TenantsCommand) Command() *cobra.Command {
 	if err := configOpts.Init(ensureDefault); err != nil {
 		log.Fatalf("Error initializing config: %s", err)
 	}
+
+	// tenants create: provision a new tenant via ProvisioningManager (no Admin API)
+	createCfg := CreateTenantConfig{}
+	createConfigOpts := config.ConfigOptions{
+		{
+			Name:      "name",
+			Usage:     "Tenant name (subdomain, e.g. rewards)",
+			OptType:   types.String,
+			ConfigKey: &createCfg.Name,
+			Required:  true,
+		},
+		{
+			Name:      "owner-email",
+			Usage:     "Email address for the tenant owner",
+			OptType:   types.String,
+			ConfigKey: &createCfg.OwnerEmail,
+			Required:  true,
+		},
+		{
+			Name:      "owner-first-name",
+			Usage:     "First name for the tenant owner",
+			OptType:   types.String,
+			ConfigKey: &createCfg.OwnerFirstName,
+			Required:  true,
+		},
+		{
+			Name:      "owner-last-name",
+			Usage:     "Last name for the tenant owner",
+			OptType:   types.String,
+			ConfigKey: &createCfg.OwnerLastName,
+			Required:  true,
+		},
+		{
+			Name:      "org-name",
+			Usage:     "Organization display name",
+			OptType:   types.String,
+			ConfigKey: &createCfg.OrgName,
+			Required:  true,
+		},
+		{
+			Name:      "base-url",
+			Usage:     "API base URL for this tenant (e.g. https://rewards.sdp.lomalo.app)",
+			OptType:   types.String,
+			ConfigKey: &createCfg.BaseURL,
+			Required:  true,
+		},
+		{
+			Name:      "ui-base-url",
+			Usage:     "Dashboard UI base URL for this tenant (e.g. https://rewards.sdp.lomalo.app)",
+			OptType:   types.String,
+			ConfigKey: &createCfg.UIBaseURL,
+			Required:  true,
+		},
+		{
+			Name:        "distribution-account-type",
+			Usage:       "Distribution account type for the tenant",
+			OptType:     types.String,
+			ConfigKey:   &createCfg.DistributionAccountType,
+			FlagDefault: string(schema.DistributionAccountStellarDBVault),
+		},
+		cmdUtils.DistributionPublicKey(&createCfg.DistributionPublicKey),
+		{
+			Name:        "disable-mfa",
+			Usage:       "Disable MFA for the tenant (initial organization setting)",
+			OptType:     types.Bool,
+			ConfigKey:   &createCfg.DisableMFA,
+			FlagDefault: false,
+		},
+		{
+			Name:        "disable-recaptcha",
+			Usage:       "Disable reCAPTCHA for the tenant (initial organization setting)",
+			OptType:     types.Bool,
+			ConfigKey:   &createCfg.DisableReCAPTCHA,
+			FlagDefault: false,
+		},
+	}
+	createConfigOpts = append(createConfigOpts, cmdUtils.TransactionSubmitterEngineConfigOptions(&txSubmitterOpts)...)
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a new tenant (provision via ProvisioningManager, no Admin API)",
+		Long:  "Provisions a new tenant by calling ProvisioningManager.ProvisionNewTenant. Run from inside the cluster (e.g. kubectl exec or one-off Job). Does not set the tenant as default.",
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			cmd.Parent().PersistentPreRun(cmd.Parent(), args)
+			createConfigOpts.Require()
+			if err := createConfigOpts.SetValues(); err != nil {
+				return fmt.Errorf("setting config values: %w", err)
+			}
+			return createCfg.Validate()
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
+			defer cancel()
+
+			adminPool, mtnPool, tssPool, err := initDBPools(ctx, globalOptions.DatabaseURL)
+			if err != nil {
+				return err
+			}
+			defer di.CleanupInstanceByValue(ctx, adminPool)
+
+			submitter, err := initSubmitter(ctx, txSubmitterOpts, adminPool, mtnPool, tssPool, createCfg.DistributionPublicKey)
+			if err != nil {
+				return err
+			}
+
+			provMgr, _, err := initProvisioning(adminPool, mtnPool, submitter)
+			if err != nil {
+				return err
+			}
+
+			netType, err := utils.GetNetworkTypeFromNetworkPassphrase(globalOptions.NetworkPassphrase)
+			if err != nil {
+				return fmt.Errorf("network type: %w", err)
+			}
+
+			newTenant, err := provMgr.ProvisionNewTenant(ctx, provisioning.ProvisionTenant{
+				Name:                    createCfg.Name,
+				UserFirstName:           createCfg.OwnerFirstName,
+				UserLastName:            createCfg.OwnerLastName,
+				UserEmail:               createCfg.OwnerEmail,
+				OrgName:                 createCfg.OrgName,
+				UIBaseURL:               createCfg.UIBaseURL,
+				BaseURL:                 createCfg.BaseURL,
+				NetworkType:             string(netType),
+				DistributionAccountType: schema.AccountType(createCfg.DistributionAccountType),
+				MFADisabled:             &createCfg.DisableMFA,
+				CAPTCHADisabled:         &createCfg.DisableReCAPTCHA,
+			})
+			if err != nil {
+				return fmt.Errorf("provision new tenant: %w", err)
+			}
+			log.Ctx(ctx).Infof("Created tenant: %s (%s)", newTenant.Name, newTenant.ID)
+			return nil
+		},
+	}
+	if err := createConfigOpts.Init(createCmd); err != nil {
+		log.Fatalf("Error initializing create config: %s", err)
+	}
+	tenantsRoot.AddCommand(createCmd)
 
 	tenantsRoot.AddCommand(ensureDefault)
 	return tenantsRoot

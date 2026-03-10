@@ -11,9 +11,9 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    # Enable CORS for API endpoints (production only)
+    # Enable CORS for API endpoints (multi-tenant subdomains)
     nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://sdp.lomalo.app"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://missa.sdp.lomalo.app,https://rewards.sdp.lomalo.app"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, PATCH, DELETE, OPTIONS"
     nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, SDP-Tenant-Name, Device-ID"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
@@ -44,15 +44,15 @@ metadata:
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
       }
-      # Route disbursement detail: API GET (with Authorization) -> backend; browser GET/refresh -> dashboard
-      # GET with Authorization is the frontend fetch() for draft details; without auth is SPA load/refresh
+      # Route disbursement detail pages to dashboard for SPA routing
+      # This handles browser refresh on detail pages like /disbursements/{uuid}
+      # Only match disbursements detail pages (not payments, receivers, etc. which are API endpoints)
+      # Only match when UUID is at the end of the path (not sub-paths like /disbursements/{uuid}/receivers)
+      # Only route GET requests to dashboard (for SPA routing), other methods (DELETE, POST, etc.) go to backend
       location ~ ^/disbursements/[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+$ {
         set $target "http://sdp-prod.default.svc.cluster.local:8000";
         if ($request_method = GET) {
           set $target "http://sdp-prod-dashboard.default.svc.cluster.local:80";
-        }
-        if ($http_authorization != "") {
-          set $target "http://sdp-prod.default.svc.cluster.local:8000";
         }
         proxy_pass $target;
         proxy_set_header Host $host;
@@ -64,10 +64,12 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - sdp.lomalo.app
+        - missa.sdp.lomalo.app
+        - rewards.sdp.lomalo.app
       secretName: sdp-lomalo-app-tls
   rules:
-    - host: sdp.lomalo.app
+    # Tenant: MISSA
+    - host: missa.sdp.lomalo.app
       http:
         paths:
           # API paths route to backend service
@@ -223,4 +225,147 @@ spec:
                 name: sdp-prod-dashboard
                 port:
                   number: 80
-
+    # Tenant: rewards
+    - host: rewards.sdp.lomalo.app
+      http:
+        paths:
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /sep10
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /sep24
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /users
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /disbursements
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /payments
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /receivers
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /wallets
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /statistics
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /api-keys
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /login
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /mfa
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /refresh-token
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /organization
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /app-config
+            pathType: Exact
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /profile
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /registration-contact-types
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /assets
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /balances
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sdp-prod-dashboard
+                port:
+                  number: 80
