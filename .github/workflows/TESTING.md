@@ -7,7 +7,7 @@
 Run the setup script:
 
 ```bash
-cd /Users/alonzobenavides/Projects/m1global-sdp-backend-clean
+cd /Users/alonzobenavides/Projects/m1global/m1global-sdp-backend
 ./.github/workflows/setup-oidc.sh
 ```
 
@@ -25,7 +25,7 @@ Or follow the manual steps in [SETUP_OIDC.md](./SETUP_OIDC.md)
 **Option B: Push a Test Commit**
 
 ```bash
-cd /Users/alonzobenavides/Projects/m1global-sdp-backend-clean
+cd /Users/alonzobenavides/Projects/m1global/m1global-sdp-backend
 # Make a small change
 echo "# Test" >> README.md
 git add README.md

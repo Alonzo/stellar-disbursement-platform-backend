@@ -210,7 +210,14 @@ func (s *DisbursementManagementService) StartDisbursement(ctx context.Context, d
 		if !disbursement.Wallet.Enabled {
 			return ErrDisbursementWalletDisabled
 		}
-		// 2. Verify Transition is Possible
+		// 2. Verify Transition is Possible (DRAFT -> STARTED not allowed by state machine; must be READY first)
+		// If this disbursement is still DRAFT but has instructions (file_content) and payments, transition to READY first so "Confirm" works.
+		if disbursement.Status == data.DraftDisbursementStatus && len(disbursement.FileContent) > 0 && disbursement.TotalPayments > 0 {
+			if err = s.Models.Disbursements.UpdateStatus(ctx, dbTx, user.ID, disbursementID, data.ReadyDisbursementStatus); err != nil {
+				return fmt.Errorf("error updating disbursement status to ready for disbursement with id %s: %w", disbursementID, err)
+			}
+			disbursement.Status = data.ReadyDisbursementStatus
+		}
 		err = disbursement.Status.TransitionTo(data.StartedDisbursementStatus)
 		if err != nil {
 			return ErrDisbursementNotReadyToStart
