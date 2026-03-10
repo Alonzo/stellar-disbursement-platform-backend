@@ -91,3 +91,23 @@ Use `<TAG>` = git commit SHA from the frontend build (e.g. `b820f23`) or `latest
 - **Backend image:** `sdp.image.repository` and tag are in the SDP section; the backend workflow overrides the tag with the commit SHA on deploy.
 
 For other production settings (CORS, ReCAPTCHA, single-tenant, etc.), see the comments in `helmchart/sdp/production-values.yaml`.
+
+---
+
+## Custom dashboard ingress (API routing)
+
+Production uses a **custom** ingress file instead of the chart’s dashboard ingress: `helmchart/sdp/dashboard-ingress-with-api-routing.yaml`. The chart’s dashboard ingress is disabled in `production-values.yaml`.
+
+This ingress routes API paths to the backend and the SPA to the dashboard. For `GET /disbursements/<uuid>` it sends:
+
+- **With `Authorization` header** → backend (API call for draft/details).
+- **Without** → dashboard (browser load or refresh of the detail URL).
+
+If you change `dashboard-ingress-with-api-routing.yaml`, apply it manually (Helm does not apply this file):
+
+```bash
+# From repo root
+kubectl apply -f helmchart/sdp/dashboard-ingress-with-api-routing.yaml
+```
+
+**Troubleshooting:** If the draft detail page shows "Could not load draft" or "Something went wrong" and the backend logs show no `GET /disbursements/<id>` request, the ingress is likely sending that API call to the dashboard (HTML) instead of the backend. Ensure the custom ingress routes `GET /disbursements/<uuid>` **with** `Authorization` to the backend (see the `if ($http_authorization != "")` block in the server-snippet).
