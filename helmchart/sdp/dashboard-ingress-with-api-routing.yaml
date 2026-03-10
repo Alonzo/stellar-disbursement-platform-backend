@@ -44,15 +44,15 @@ metadata:
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
       }
-      # Route disbursement detail pages to dashboard for SPA routing
-      # This handles browser refresh on detail pages like /disbursements/{uuid}
-      # Only match disbursements detail pages (not payments, receivers, etc. which are API endpoints)
-      # Only match when UUID is at the end of the path (not sub-paths like /disbursements/{uuid}/receivers)
-      # Only route GET requests to dashboard (for SPA routing), other methods (DELETE, POST, etc.) go to backend
+      # Route disbursement detail: API GET (with Authorization) -> backend; browser GET/refresh -> dashboard
+      # GET with Authorization is the frontend fetch() for draft details; without auth is SPA load/refresh
       location ~ ^/disbursements/[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+-[0-9a-f]+$ {
         set $target "http://sdp-prod.default.svc.cluster.local:8000";
         if ($request_method = GET) {
           set $target "http://sdp-prod-dashboard.default.svc.cluster.local:80";
+        }
+        if ($http_authorization != "") {
+          set $target "http://sdp-prod.default.svc.cluster.local:8000";
         }
         proxy_pass $target;
         proxy_set_header Host $host;
