@@ -59,7 +59,7 @@ For more information about launching and configuring the SDP, see the [Quick Sta
 
 ### Helm
 
-To deploy the SDP using Helm, see the [Helm Chart](./helmchart/sdp/README.md). For **production (sdp.lomalo.app)** deploy workflow, image sources, and how to verify or run a manual upgrade, see [docs/PRODUCTION_DEPLOY.md](./docs/PRODUCTION_DEPLOY.md). That doc also covers **adding a new tenant** (DNS, ingress, `tenants create`, adding users) in a multi-tenant deployment.
+To deploy the SDP using Helm, see the [Helm Chart](./helmchart/sdp/README.md).
 
 ## Secure Operation Manual
 
@@ -83,7 +83,7 @@ The SDP supports both reCAPTCHA v2 ("I'm not a robot") and reCAPTCHA v3 (invisib
 
 #### Configuration
 
-- **CAPTCHA_TYPE**: Specifies the type of CAPTCHA to use. Options: `GOOGLE_RECAPTCHA_V2` (default) or `GOOGLE_RECAPTCHA_V3`
+- **CAPTCHA_TYPE**: Specifies the type of CAPTCHA to use. Options: `GOOGLE_RECAPTCHA_V3` or `GOOGLE_RECAPTCHA_V2`
 - **RECAPTCHA_SITE_KEY**: The Google reCAPTCHA site key
 - **RECAPTCHA_SITE_SECRET_KEY**: The Google reCAPTCHA site secret key
 - **RECAPTCHA_V3_MIN_SCORE**: Minimum score threshold for reCAPTCHA v3 (0.0 to 1.0, default: 0.5). Only used when CAPTCHA_TYPE is `GOOGLE_RECAPTCHA_V3`

@@ -1,0 +1,248 @@
+name: Automated Release Process
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (x.y.z or x.y.z-rc.1)"
+        required: true
+        type: string
+
+env:
+  REPO_ORG: stellar
+  REPO_NAME: stellar-disbursement-platform-backend
+  REVIEWER: JiahuiWho,marwen-abid
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate version format
+        run: |
+          if ! [[ ${{ inputs.version }} =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha|beta)\.[0-9]+)?$ ]]; then
+            echo "Error: Version must be in format x.y.z or x.y.z-rc.n"
+            echo "Examples:"
+            echo "  1.2.3"
+            echo "  1.2.3-rc.1"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Configure Git User
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Create release/${{ inputs.version }} branch
+        run: |
+          git checkout -b release/${{ inputs.version }} origin/${{ github.ref_name }}
+
+      - name: Install Node.js for tooling
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot@0.0.410
+
+      - name: Bump all version references
+        run: |
+          VERSION="${{ inputs.version }}"
+          sed -i "s/^const Version = \".*\"/const Version = \"$VERSION\"/" main.go
+          sed -i "s/^version: \".*\"/version: \"$VERSION\"/" helmchart/sdp/Chart.yaml
+          sed -i "s/^appVersion: \".*\"/appVersion: \"$VERSION\"/" helmchart/sdp/Chart.yaml
+          sed -i "/^  image:/,/^  [a-z]/ { s|^    tag: \".*\"|    tag: \"$VERSION\"| }" helmchart/sdp/values.yaml
+          sed -i "s|fullName: stellar/stellar-disbursement-platform-frontend:.*|fullName: stellar/stellar-disbursement-platform-frontend:$VERSION|" helmchart/sdp/values.yaml
+          git add main.go helmchart/sdp/Chart.yaml helmchart/sdp/values.yaml
+
+      - name: Generate CHANGELOG entry
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ inputs.version }}"
+          REPO="${{ github.repository }}"
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || true)
+          BASE="${LAST_TAG:-$(git rev-list --max-parents=0 HEAD)}"
+
+          git log "$BASE"..HEAD --pretty=format:"%h %s" --no-merges > /tmp/commits.txt
+          awk '
+            /^## \[Unreleased\]/ { in_section=1; next }
+            /^## \[/ { if (in_section) exit }
+            in_section { print }
+          ' CHANGELOG.md > /tmp/unreleased-body.md
+
+          : > /tmp/new-entries.md
+          if [ -s /tmp/commits.txt ] && [ -n "${GH_TOKEN:-}" ]; then
+            copilot -sp "$(cat <<PROMPT
+          You are a CHANGELOG generator for ${REPO}.
+
+          Below are git commits since the last release (${BASE}):
+          $(cat /tmp/commits.txt)
+
+          The current Unreleased section of CHANGELOG.md is:
+          $(cat /tmp/unreleased-body.md)
+
+          Your job:
+          1. Identify commits NOT already covered in the Unreleased section above.
+          2. For each missing commit, categorize it: Added, Changed, Fixed, or Security and Dependencies.
+          3. Format: - Description [#PR](https://github.com/${REPO}/pull/PR)
+          4. Extract PR numbers from subjects (e.g. (#1049) -> 1049).
+          5. Skip merge commits and chore-only commits that don't add functionality.
+          6. Output ONLY the new entries grouped by category (### Added, ### Changed, etc). No header, no explanation, no code blocks.
+          7. If all commits are already covered, output nothing.
+          PROMPT
+          )" > /tmp/new-entries.md 2>/dev/null || true
+          else
+            echo "Skipping Copilot changelog gap fill (no commits or missing COPILOT_GITHUB_TOKEN)"
+          fi
+
+          python3 scripts/release/update_changelog.py \
+            --changelog CHANGELOG.md \
+            --version "$VERSION" \
+            --repo "$REPO" \
+            --base "$BASE" \
+            --new-entries-file /tmp/new-entries.md
+
+          if ! git diff --quiet CHANGELOG.md 2>/dev/null; then
+            git add CHANGELOG.md
+          fi
+
+      - name: Regenerate Helm README
+        run: |
+          npm install -g @bitnami/readme-generator-for-helm@2.7.0 2>/dev/null
+          readme-generator -v helmchart/sdp/values.yaml -r helmchart/sdp/README.md
+          if ! git diff --quiet helmchart/sdp/README.md; then
+            git add helmchart/sdp/README.md
+          fi
+
+      - name: Detect contract changes
+        id: detect_contracts
+        run: |
+          set -euo pipefail
+
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          BASE="${LAST_TAG:-origin/main}"
+
+          if CHANGED=$(git diff --name-only "$BASE"...HEAD -- contracts/ wasms/ 2>/dev/null); then
+            if [ -n "$CHANGED" ]; then
+              echo "contracts_changed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "contracts_changed=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "contracts_changed=unknown" >> "$GITHUB_OUTPUT"
+            echo "Unable to determine contract changes. Manual verification required."
+          fi
+
+      - name: Commit automated changes
+        run: |
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: automated release preparation for ${{ inputs.version }}"
+          else
+            echo "No changes to commit"
+          fi
+          git push origin release/${{ inputs.version }}
+
+      - name: Create main PR
+        id: create_main_pr
+        run: |
+          MAIN_PR_URL=$(sed "s/{{version}}/${{ inputs.version }}/g" .github/workflows/templates/release-pr-main.md | \
+          gh pr create --repo ${{ env.REPO_ORG }}/${{ env.REPO_NAME }} \
+            --base main \
+            --head release/${{ inputs.version }} \
+            --title "Release \`${{ inputs.version }}\` to \`main\`" \
+            --body-file - \
+            --assignee "${{ github.actor }}" \
+            --reviewer "${{ env.REVIEWER }}")
+          echo "main_pr_url=${MAIN_PR_URL}" >> $GITHUB_OUTPUT
+
+      - name: Create release/${{ inputs.version }}-dev branch
+        run: |
+          git checkout -b release/${{ inputs.version }}-dev release/${{ inputs.version }}
+          git push origin release/${{ inputs.version }}-dev
+
+      - name: Create develop PR
+        id: create_dev_pr
+        run: |
+          CONTRACTS_STATUS="${{ steps.detect_contracts.outputs.contracts_changed }}"
+          if [ "$CONTRACTS_STATUS" = "true" ]; then
+            CONTRACTS_MSG="⚠️ **Contracts changed** - WASM artifacts need to be updated"
+          elif [ "$CONTRACTS_STATUS" = "unknown" ]; then
+            CONTRACTS_MSG="⚠️ **Contract change detection failed** - verify contract/WASM changes manually"
+          else
+            CONTRACTS_MSG="✅ No contract changes detected"
+          fi
+
+          DEV_PR_URL=$(sed -e "s/{{version}}/${{ inputs.version }}/g" \
+              -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
+              -e "s|{{contracts_changed}}|${CONTRACTS_MSG}|g" \
+              .github/workflows/templates/release-pr-dev.md | \
+          gh pr create --repo ${{ env.REPO_ORG }}/${{ env.REPO_NAME }} \
+            --base develop \
+            --head release/${{ inputs.version }}-dev \
+            --title "Release \`${{ inputs.version }}\` to \`dev\`" \
+            --body-file - \
+            --assignee "${{ github.actor }}" \
+            --reviewer "${{ env.REVIEWER }}")
+          echo "dev_pr_url=${DEV_PR_URL}" >> $GITHUB_OUTPUT
+
+      - name: Extract release notes from CHANGELOG
+        run: |
+          VERSION="${{ inputs.version }}"
+          python3 -c "
+          import re, sys
+          text = open('CHANGELOG.md').read()
+          m = re.search(r'(## \[' + re.escape('$VERSION') + r'\].*?)(?=\n## \[|\Z)', text, re.DOTALL)
+          sys.stdout.write(m.group(1) if m else '')
+          " > /tmp/release-notes.md
+
+          if [ ! -s /tmp/release-notes.md ]; then
+            echo "Initial draft for release \`$VERSION\`" > /tmp/release-notes.md
+          fi
+
+      - name: Create Draft Release
+        id: create_release
+        run: |
+          RELEASE_URL=$(gh release create "${{ inputs.version }}" \
+            --title "${{ inputs.version }}" \
+            --draft \
+            --notes-file /tmp/release-notes.md)
+          echo "release_url=${RELEASE_URL}" >> $GITHUB_OUTPUT
+
+      - name: Create Issue
+        id: create_issue
+        run: |
+          ISSUE_URL=$(sed -e "s/{{version}}/${{ inputs.version }}/g" \
+              -e "s|{{ main_pr_url }}|${{ steps.create_main_pr.outputs.main_pr_url }}|g" \
+              -e "s|{{ dev_pr_url }}|${{ steps.create_dev_pr.outputs.dev_pr_url }}|g" \
+              -e "s|{{ release_url }}|${{ steps.create_release.outputs.release_url }}|g" \
+              .github/workflows/templates/release-issue.md | \
+          gh issue create \
+            --title "Release \`${{ inputs.version }}\`" \
+            --body-file - \
+            --label "release" \
+            --assignee "${{ github.actor }}")
+          echo "issue_url=${ISSUE_URL}" >> $GITHUB_OUTPUT
+
+      - name: Print Summary
+        run: |
+          echo "Release Process Summary for ${{ inputs.version }}"
+          echo "----------------------------------------"
+          echo "Issue: ${{ steps.create_issue.outputs.issue_url }}"
+          echo "Main PR: ${{ steps.create_main_pr.outputs.main_pr_url }}"
+          echo "Dev PR: ${{ steps.create_dev_pr.outputs.dev_pr_url }}"
+          echo "Draft Release: ${{ steps.create_release.outputs.release_url }}"
