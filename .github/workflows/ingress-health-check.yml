@@ -1,0 +1,161 @@
+name: Ingress NLB Health Check
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:  # Allow manual triggers
+  push:
+    branches:
+      - main
+    paths:
+      - 'infrastructure/ingress-nginx/**'
+      - '.github/workflows/ingress-health-check.yml'
+
+env:
+  AWS_REGION: us-west-2
+  AWS_ACCOUNT: "084034390838"
+  EKS_CLUSTER_NAME: floral-bluegrass-outfit
+  VPC_ID: vpc-030f52405737ff0f4
+
+jobs:
+  check-ingress-health:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for OIDC authentication
+      issues: write    # For creating issues on failures
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      # Configure AWS credentials using OIDC
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT }}:role/github-actions-ecr-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      # Install kubectl
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'latest'
+
+      # Configure kubectl for EKS
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.EKS_CLUSTER_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+      # Install jq (required by health check script)
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+
+      # Make health check script executable
+      - name: Setup health check script
+        run: |
+          chmod +x infrastructure/ingress-nginx/check-lb-health.sh
+          # Verify script exists
+          if [ ! -f "infrastructure/ingress-nginx/check-lb-health.sh" ]; then
+            echo "❌ Health check script not found!"
+            exit 1
+          fi
+
+      # Run health check
+      - name: Run ingress health check
+        id: health_check
+        continue-on-error: true
+        env:
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          # Unset AWS_PROFILE to use OIDC credentials
+          unset AWS_PROFILE
+          ./infrastructure/ingress-nginx/check-lb-health.sh
+
+      # Create GitHub issue if health check fails
+      - name: Create issue on failure
+        if: failure() && steps.health_check.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🚨 Ingress NLB Health Check Failed - ${new Date().toISOString()}`;
+            const body = `## Ingress Load Balancer Health Check Failed
+
+            **Time:** ${new Date().toISOString()}
+            **Workflow:** ${{ github.workflow }}
+            **Run:** ${{ github.run_id }}
+            **Commit:** ${{ github.sha }}
+
+            The ingress NLB health check detected issues. Please investigate:
+
+            1. Check the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            2. Run the health check manually: \`./infrastructure/ingress-nginx/check-lb-health.sh\`
+            3. Review the prevention guide: \`INGRESS_NLB_PREVENTION_GUIDE.md\`
+
+            **Common issues:**
+            - Load balancer missing subnets in availability zones where pods are running
+            - Unhealthy targets
+            - External connectivity issues
+
+            **Quick fix:**
+            \`\`\`bash
+            # Get all public subnets
+            SUBNETS=$(aws ec2 describe-subnets \\
+              --region us-west-2 \\
+              --filters "Name=vpc-id,Values=vpc-030f52405737ff0f4" "Name=map-public-ip-on-launch,Values=true" \\
+              --query 'Subnets[*].SubnetId' \\
+              --output text | tr '\\t' ',')
+
+            # Update ingress service
+            kubectl annotate svc ingress-nginx-controller -n ingress-nginx \\
+              service.beta.kubernetes.io/aws-load-balancer-subnets="$SUBNETS" \\
+              --overwrite
+            \`\`\`
+            `;
+
+            // Check if issue already exists
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'ingress-health-check'
+            });
+
+            const existingIssue = issues.find(issue => 
+              issue.title.includes('Ingress NLB Health Check Failed')
+            );
+
+            if (!existingIssue) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['ingress-health-check', 'infrastructure', 'urgent']
+              });
+            } else {
+              // Add comment to existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `Health check failed again at ${new Date().toISOString()}\n\nSee workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+              });
+            }
+
+      # Summary
+      - name: Health check summary
+        if: always()
+        run: |
+          if [ "${{ steps.health_check.outcome }}" == "success" ]; then
+            echo "✅ Ingress NLB health check passed"
+          else
+            echo "❌ Ingress NLB health check failed - see logs above"
+            exit 1
+          fi
+

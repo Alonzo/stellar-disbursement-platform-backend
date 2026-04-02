@@ -92,11 +92,6 @@ func (a *AuthCommand) Command() *cobra.Command {
 					log.Ctx(ctx).Fatalf("tenant-id is required")
 				}
 
-				forgotPasswordLink, err := url.JoinPath(globalOptions.SDPUIBaseURL, "forgot-password")
-				if err != nil {
-					log.Ctx(ctx).Fatalf("error getting forgot password link: %s", err.Error())
-				}
-
 				// 1. Get Tenant and save it in context.
 				adminDSN, err := router.GetDSNForAdmin(globalOptions.DatabaseURL)
 				if err != nil {
@@ -113,6 +108,16 @@ func (a *AuthCommand) Command() *cobra.Command {
 					log.Ctx(ctx).Fatalf("error getting tenant by id %s: %s", tenantID, err.Error())
 				}
 				ctx = sdpcontext.SetTenantInContext(ctx, t)
+
+				// Use tenant's UI base URL for the invitation link so the link targets the correct subdomain (e.g. rewards.sdp.lomalo.app).
+				uiBaseURL := globalOptions.SDPUIBaseURL
+				if t.SDPUIBaseURL != nil && *t.SDPUIBaseURL != "" {
+					uiBaseURL = *t.SDPUIBaseURL
+				}
+				forgotPasswordLink, err := url.JoinPath(uiBaseURL, "forgot-password")
+				if err != nil {
+					log.Ctx(ctx).Fatalf("error getting forgot password link: %s", err.Error())
+				}
 
 				// 2. Create user using multi-tenant connection pool
 				tr := tenant.NewMultiTenantDataSourceRouter(tm)

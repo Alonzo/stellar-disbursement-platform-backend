@@ -106,9 +106,11 @@ func WalletColumnNames(tableReference, resultAlias string, includeDates bool) st
 	return strings.Join(columns, ",\n")
 }
 
-const getQuery = `
+// getQuery selects only columns that map to the Wallet struct to avoid "missing destination name"
+// when the DB has extra columns (e.g. from a different migration or tenant schema).
+var getQuery = `
 		SELECT 
-		    w.*, 
+		    ` + WalletColumnNames("w", "", true) + `,
 			jsonb_agg(
 				DISTINCT to_jsonb(a)
 			) FILTER (WHERE a.id IS NOT NULL) AS assets
