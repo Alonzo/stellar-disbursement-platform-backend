@@ -92,7 +92,7 @@ sdp:
     repository: 084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-backend
     pullPolicy: Always
     # Pin to ECR tag from CI (push to main). Chart uses this image for both SDP and TSS workloads.
-    tag: "c59c560eb2f89b682af0a77c6de21efbb4139d17"
+    tag: "4b394135d2f4b77bcb4a32976a446620edd4f422"
 
   ## Deployment configuration
   deployment:
