@@ -147,9 +147,9 @@ sdp:
       DISABLE_RECAPTCHA: "false"  # Re-enabled after password setup
       DISABLE_MFA: "false"  # Re-enabled after OIDC provider fix
       
-      ## Scheduler configuration
-      SCHEDULER_PAYMENT_JOB_SECONDS: "10"
-      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "10"
+      ## Scheduler configuration (min interval enforced in code: 5s)
+      SCHEDULER_PAYMENT_JOB_SECONDS: "5"
+      SCHEDULER_RECEIVER_INVITATION_JOB_SECONDS: "5"
       MAX_INVITATION_RESEND_ATTEMPTS: "3"
       TENANT_XLM_BOOTSTRAP_AMOUNT: "5"
       
@@ -243,10 +243,10 @@ tss:
       NETWORK_PASSPHRASE: "Public Global Stellar Network ; September 2015"  # MAINNET: Changed from testnet
       HORIZON_URL: "https://horizon.stellar.org"  # MAINNET: Changed from testnet
       DISTRIBUTION_PUBLIC_KEY: "GBVKJVVNICHHOD6G7JNAGOZKP2LQI2KGICEVVRKXN37LQKYGMCAK72VY"  # MAINNET: Production distribution account
-      NUM_CHANNEL_ACCOUNTS: "1"
-      MAX_BASE_FEE: "100000"
+      NUM_CHANNEL_ACCOUNTS: "20"
+      MAX_BASE_FEE: "1000000"
 
-      ## Background tasks configuration
+      ## Background tasks configuration (TSS validates >= 6; values below 6 crash the submitter)
       QUEUE_POLLING_INTERVAL: "6"
 
       ## Database connection pool tuning
