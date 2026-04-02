@@ -35,7 +35,7 @@ How backend and frontend are deployed to EKS and how to verify or run a manual u
 
 ## Verifying what is running
 
-From a machine with `kubectl` and AWS access (e.g. SSO: `aws sso login --profile devops`):
+From a machine with `kubectl` and AWS access (e.g. SSO: `aws sso login --profile devops`). The IAM role must be allowed in the cluster `aws-auth` ConfigMap (e.g. DevOpsEngineer); some security-audit roles can authenticate to AWS but still get `Unauthorized` from the Kubernetes API.
 
 ```bash
 # List deployments and images

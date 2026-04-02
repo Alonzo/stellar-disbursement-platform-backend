@@ -91,7 +91,8 @@ sdp:
   image:
     repository: 084034390838.dkr.ecr.us-west-2.amazonaws.com/stellar-disbursement-platform-backend
     pullPolicy: Always
-    tag: "latest-csp-fix-amd64"  # CSP fix for reCAPTCHA cross-origin issues
+    # Pin to ECR tag from CI (push to main). Chart uses this image for both SDP and TSS workloads.
+    tag: "c59c560eb2f89b682af0a77c6de21efbb4139d17"
 
   ## Deployment configuration
   deployment:
@@ -205,11 +206,11 @@ tss:
     port: 9000
     metricsPort: 9002
 
-  ## Docker image configuration
+  ## Docker image (ignored by chart: TSS deployment uses sdp.image.repository:sdp.image.tag — see templates/02.3-deployment-tss.yaml)
   image:
     repository: stellar/stellar-disbursement-platform-tss
     pullPolicy: Always
-    tag: "5.0.0"  # Use official TSS image version
+    tag: "5.0.0"
 
   ## Deployment configuration
   deployment:
